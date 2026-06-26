@@ -50,6 +50,7 @@ public class TrendsActivity extends AppCompatActivity {
         sub.setTextColor(Color.DKGRAY);
         sub.setPadding(0, 0, 0, dp(12));
         root.addView(sub);
+        root.addView(Ui.navRow(this, "trends"));
 
         addMetric(root, "Work (Hospital) — weekly avg/day", "hospital",
                 Color.parseColor("#1565C0"));

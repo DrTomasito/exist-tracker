@@ -53,6 +53,9 @@ public class DashboardActivity extends AppCompatActivity {
         status.setPadding(0, Ui.dp(this, 6), 0, Ui.dp(this, 10));
         root.addView(status);
 
+        // Consistent navigation across screens.
+        root.addView(Ui.navRow(this, "dashboard"));
+
         // --- Today at a glance: work in/out ---
         LinearLayout workCard = Ui.card(this);
         workCard.addView(Ui.eyebrow(this, "Today at work"));
@@ -151,8 +154,6 @@ public class DashboardActivity extends AppCompatActivity {
         root.addView(dow);
 
         // --- Navigation buttons ---
-        root.addView(navButton("⏱️  Activity timers", () ->
-                startActivity(new Intent(this, StopwatchActivity.class))));
         root.addView(navButton("📈  All trends & charts", () ->
                 startActivity(new Intent(this, TrendsActivity.class))));
         root.addView(navButton("⚙️  Settings & connections", () ->

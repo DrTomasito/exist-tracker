@@ -1,9 +1,12 @@
 package com.existtracker.app;
 
 import android.content.Context;
+import android.content.Intent;
+import android.app.Activity;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
+import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -122,5 +125,59 @@ public class Ui {
         l.setTextSize(12);
         cell.addView(l);
         return cell;
+    }
+
+    /**
+     * A consistent navigation row for the top of every screen. Shows four
+     * sections; the current one is highlighted and inert, the others launch
+     * their screen. `current` is one of: "dashboard", "counters", "trends",
+     * "settings".
+     */
+    public static LinearLayout navRow(final Activity a, String current) {
+        LinearLayout row = new LinearLayout(a);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setPadding(0, dp(a, 4), 0, dp(a, 12));
+
+        row.addView(navTab(a, "Home", "dashboard", current, DashboardActivity.class));
+        row.addView(navTab(a, "Counters", "counters", current, StopwatchActivity.class));
+        row.addView(navTab(a, "Trends", "trends", current, TrendsActivity.class));
+        row.addView(navTab(a, "Settings", "settings", current, MainActivity.class));
+        return row;
+    }
+
+    private static TextView navTab(final Activity a, String label, String key,
+                                   String current, final Class<?> target) {
+        TextView t = new TextView(a);
+        t.setText(label);
+        t.setGravity(Gravity.CENTER);
+        t.setTextSize(13);
+        t.setPadding(dp(a, 6), dp(a, 8), dp(a, 6), dp(a, 8));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        lp.setMargins(dp(a, 3), 0, dp(a, 3), 0);
+        t.setLayoutParams(lp);
+
+        boolean isCurrent = key.equals(current);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(a, 10));
+        if (isCurrent) {
+            bg.setColor(ACCENT);
+            t.setTextColor(BG);
+        } else {
+            bg.setColor(CARD_ALT);
+            t.setTextColor(TEXT);
+        }
+        t.setBackground(bg);
+
+        if (!isCurrent) {
+            t.setOnClickListener(v -> {
+                Intent i = new Intent(a, target);
+                // Reuse an existing instance if it's already in the stack,
+                // so we don't pile up screens as the user taps around.
+                i.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                a.startActivity(i);
+            });
+        }
+        return t;
     }
 }

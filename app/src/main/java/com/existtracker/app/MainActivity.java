@@ -125,6 +125,7 @@ public class MainActivity extends AppCompatActivity {
         statusView = new TextView(this);
         statusView.setPadding(0, dp(4), 0, dp(12));
         root.addView(statusView);
+        root.addView(Ui.navRow(this, "settings"));
 
         // --- Step 1: credentials ---
         root.addView(section("Step 1 — Connect your Exist account"));

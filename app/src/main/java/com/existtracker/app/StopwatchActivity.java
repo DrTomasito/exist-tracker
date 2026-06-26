@@ -84,6 +84,7 @@ public class StopwatchActivity extends AppCompatActivity {
                 + "counters tally how many times. Pin favorites to your home screen.");
         sub.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 12));
         root.addView(sub);
+        root.addView(Ui.navRow(this, "counters"));
 
         List<Stopwatches.SW> all = store.getAll();
         if (all.isEmpty()) {
@@ -305,11 +306,13 @@ public class StopwatchActivity extends AppCompatActivity {
 
         CheckBox pushCb = new CheckBox(this);
         pushCb.setText("Also push the daily total to Exist");
-        pushCb.setChecked(existing == null || existing.pushToExist);
+        // Default OFF for new trackers — most are internal-only; syncing to
+        // Exist is a deliberate opt-in so Exist doesn't fill with attributes.
+        pushCb.setChecked(existing != null && existing.pushToExist);
         box.addView(pushCb);
 
         EditText attrEt = new EditText(this);
-        attrEt.setHint("Exist attribute (only if pushing)");
+        attrEt.setHint("Exist attribute — leave blank to keep internal-only");
         if (existing != null) attrEt.setText(existing.attr);
         box.addView(attrEt);
         Button pick = new Button(this);
@@ -350,10 +353,15 @@ public class StopwatchActivity extends AppCompatActivity {
                 .setPositiveButton("Save", (d, w) -> {
                     String nm = nameEt.getText().toString().trim();
                     String at = attrEt.getText().toString().trim();
-                    boolean doPush = pushCb.isChecked();
+                    boolean wantPush = pushCb.isChecked();
                     boolean pin = pinCb.isChecked();
                     if (nm.isEmpty()) { toast("Enter a name."); return; }
-                    if (doPush && at.isEmpty()) { toast("Pick an Exist attribute, or untick pushing."); return; }
+                    // If "push to Exist" is on but no attribute was entered, just
+                    // make it internal-only rather than blocking the save.
+                    boolean doPush = wantPush && !at.isEmpty();
+                    if (wantPush && at.isEmpty()) {
+                        toast("Saved as internal-only (no Exist attribute set).");
+                    }
                     if (existing == null) store.addTracker(nm, at, chosen[0], type, doPush, pin);
                     else store.updateTracker(existing.id, nm, at, chosen[0], doPush, pin);
                     rebuild();
