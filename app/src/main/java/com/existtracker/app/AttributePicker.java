@@ -82,9 +82,12 @@ public class AttributePicker {
 
     private void showChooser(List<ExistApi.AttrInfo> attrs, String currentName,
                              String suggestedGroup, OnPicked cb) {
-        // Build a labelled list. First entry is "Create new…".
+        // Build the list of existing attributes (no "create" row here anymore;
+        // there's a dedicated button below so it's a single obvious tap).
         List<String> display = new ArrayList<>();
-        display.add("➕  Create a new attribute…");
+        if (attrs.isEmpty()) {
+            display.add("(no existing attributes found)");
+        }
         for (ExistApi.AttrInfo a : attrs) {
             String g = a.groupLabel == null ? "" : a.groupLabel;
             String own = a.owned ? "" : "  (owned by another app)";
@@ -98,36 +101,37 @@ public class AttributePicker {
 
         // Pre-select the current attribute if it's in the list.
         for (int i = 0; i < attrs.size(); i++) {
-            if (attrs.get(i).name.equals(currentName)) { spinner.setSelection(i + 1); break; }
+            if (attrs.get(i).name.equals(currentName)) { spinner.setSelection(i); break; }
         }
 
         LinearLayout box = new LinearLayout(activity);
         box.setOrientation(LinearLayout.VERTICAL);
         int p = dp(16); box.setPadding(p, p, p, p);
         TextView hint = new TextView(activity);
-        hint.setText("Pick one of your existing Exist attributes, or choose "
-                + "“Create a new attribute…” to make one.");
+        hint.setText("Pick one of your existing Exist attributes below, or tap "
+                + "“Create new” to make a brand-new one.");
         hint.setTextSize(13);
         box.addView(hint);
         box.addView(spinner);
 
+        final boolean hasAttrs = !attrs.isEmpty();
         new AlertDialog.Builder(activity)
                 .setTitle("Choose attribute")
                 .setView(box)
-                .setPositiveButton("Select", (d, w) -> {
+                // Positive = use the selected existing attribute.
+                .setPositiveButton("Use selected", (d, w) -> {
+                    if (!hasAttrs) { toast("No existing attributes — tap Create new."); return; }
                     int idx = spinner.getSelectedItemPosition();
-                    if (idx == 0) {
-                        showCreateForm(suggestedGroup, cb);
+                    ExistApi.AttrInfo a = attrs.get(idx);
+                    if (!a.owned) {
+                        confirmAcquire(a, cb);
                     } else {
-                        ExistApi.AttrInfo a = attrs.get(idx - 1);
-                        if (!a.owned) {
-                            confirmAcquire(a, cb);
-                        } else {
-                            cb.picked(a.name);
-                            toast("Using “" + a.label + "”.");
-                        }
+                        cb.picked(a.name);
+                        toast("Using “" + a.label + "”.");
                     }
                 })
+                // Neutral = create a brand-new attribute (always available).
+                .setNeutralButton("＋ Create new", (d, w) -> showCreateForm(suggestedGroup, cb))
                 .setNegativeButton("Cancel", null)
                 .show();
     }
@@ -192,6 +196,19 @@ public class AttributePicker {
         }
         box.addView(groupSpinner);
 
+        TextView l3 = new TextView(activity);
+        l3.setText("How Exist treats the value:");
+        l3.setTextSize(13);
+        l3.setPadding(0, dp(10), 0, 0);
+        box.addView(l3);
+        final String[] vtLabels = {"Time / duration (shows as 8h 5m)", "Count / number"};
+        final int[] vtValues = {3, 0};
+        Spinner vtSpinner = new Spinner(activity);
+        vtSpinner.setAdapter(new ArrayAdapter<>(activity,
+                android.R.layout.simple_spinner_dropdown_item, vtLabels));
+        vtSpinner.setSelection(0); // default to duration/time
+        box.addView(vtSpinner);
+
         new AlertDialog.Builder(activity)
                 .setTitle("Create new attribute")
                 .setView(box)
@@ -199,13 +216,14 @@ public class AttributePicker {
                     String label = labelEt.getText().toString().trim();
                     if (label.isEmpty()) { toast("Please enter a name."); return; }
                     String group = GROUP_NAMES[groupSpinner.getSelectedItemPosition()];
-                    createNew(label, group, cb);
+                    int vt = vtValues[vtSpinner.getSelectedItemPosition()];
+                    createNew(label, group, vt, cb);
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
     }
 
-    private void createNew(String label, String group, OnPicked cb) {
+    private void createNew(String label, String group, int valueType, OnPicked cb) {
         final ProgressDialog pd = new ProgressDialog(activity);
         pd.setMessage("Creating “" + label + "” in Exist…");
         pd.setCancelable(false);
@@ -213,7 +231,7 @@ public class AttributePicker {
         new Thread(() -> {
             String name = null;
             try {
-                name = new ExistApi(activity).createCustomAttribute(label, group);
+                name = new ExistApi(activity).createCustomAttribute(label, group, valueType);
             } catch (Exception ignored) {}
             final String finalName = name;
             activity.runOnUiThread(() -> {
