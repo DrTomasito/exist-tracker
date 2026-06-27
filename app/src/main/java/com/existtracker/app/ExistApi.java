@@ -92,16 +92,23 @@ public class ExistApi {
 
     /**
      * Make sure an attribute exists and is owned by us.
-     * group is "location" or "social". value_type 0 = integer.
+     * Defaults to duration type (minutes) since most of our attributes are
+     * time-based; use the 4-arg version to specify a different value type.
+     * value_type 3 = Duration (minutes), 0 = Integer count.
      * Safe to call repeatedly; Exist ignores duplicates.
      */
     public void ensureAttribute(String name, String label, String group) throws IOException {
+        ensureAttribute(name, label, group, 3); // default: duration (minutes)
+    }
+
+    public void ensureAttribute(String name, String label, String group,
+                                int valueType) throws IOException {
         JSONArray arr = new JSONArray();
         try {
             JSONObject a = new JSONObject();
             a.put("label", label);
             a.put("group", group);
-            a.put("value_type", 0); // integer (minutes)
+            a.put("value_type", valueType);
             a.put("manual", false);
             arr.put(a);
         } catch (Exception ignored) {}
@@ -218,12 +225,17 @@ public class ExistApi {
      * Exist assigned (derived from the label), or null on failure.
      */
     public String createCustomAttribute(String label, String groupName) throws IOException {
+        return createCustomAttribute(label, groupName, 3); // default duration (minutes)
+    }
+
+    public String createCustomAttribute(String label, String groupName, int valueType)
+            throws IOException {
         JSONArray arr = new JSONArray();
         try {
             JSONObject a = new JSONObject();
             a.put("label", label);
             a.put("group", groupName);
-            a.put("value_type", 0); // integer (minutes)
+            a.put("value_type", valueType);
             a.put("manual", true);
             arr.put(a);
         } catch (Exception ignored) {}
