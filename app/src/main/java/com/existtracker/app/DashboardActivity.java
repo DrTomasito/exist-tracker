@@ -317,6 +317,8 @@ public class DashboardActivity extends AppCompatActivity {
             java.util.List<String> labels = new java.util.ArrayList<>();
             for (int i = 0; i < vals.size(); i++) labels.add("");
             chart.setData(sw.name, color, labels, vals);
+            chart.setScaleMode(true);
+            chart.setReferenceLine(5, Ui.MUTED); // neutral midpoint
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 120));
             chart.setLayoutParams(lp);

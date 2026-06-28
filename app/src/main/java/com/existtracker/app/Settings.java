@@ -11,10 +11,11 @@ public class Settings {
 
     private static final String FILE = "exist_tracker_prefs";
     private final SharedPreferences prefs;
+    private final Context context;
 
     public Settings(Context ctx) {
-        prefs = ctx.getApplicationContext()
-                .getSharedPreferences(FILE, Context.MODE_PRIVATE);
+        context = ctx.getApplicationContext();
+        prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE);
     }
 
     // ----- OAuth credentials -----
@@ -235,6 +236,19 @@ public class Settings {
                 else if (v instanceof Boolean) o.put("B|" + e.getKey(), v);
                 else if (v instanceof Long)    o.put("L|" + e.getKey(), v);
             }
+            // Also include the stopwatches/counters/scales prefs (trackers, daily
+            // totals, session log WITH notes) so a backup is complete. Keys are
+            // prefixed with "SW::" so import can route them to the right file.
+            SharedPreferences sw = context.getSharedPreferences(
+                    "exist_stopwatches", Context.MODE_PRIVATE);
+            for (java.util.Map.Entry<String, ?> e : sw.getAll().entrySet()) {
+                Object v = e.getValue();
+                String k = "SW::" + e.getKey();
+                if (v instanceof String)  o.put("S|" + k, v);
+                else if (v instanceof Integer) o.put("I|" + k, v);
+                else if (v instanceof Boolean) o.put("B|" + k, v);
+                else if (v instanceof Long)    o.put("L|" + k, v);
+            }
             return o.toString(2);
         } catch (Exception e) {
             return "{}";
@@ -245,19 +259,26 @@ public class Settings {
         try {
             org.json.JSONObject o = new org.json.JSONObject(json);
             SharedPreferences.Editor ed = prefs.edit();
+            SharedPreferences swPrefs = context.getSharedPreferences(
+                    "exist_stopwatches", Context.MODE_PRIVATE);
+            SharedPreferences.Editor swEd = swPrefs.edit();
             java.util.Iterator<String> it = o.keys();
             while (it.hasNext()) {
                 String tagged = it.next();
                 String type = tagged.substring(0, 1);
                 String key = tagged.substring(2);
+                // Route stopwatch-prefixed keys to the stopwatches file.
+                SharedPreferences.Editor target = ed;
+                if (key.startsWith("SW::")) { target = swEd; key = key.substring(4); }
                 switch (type) {
-                    case "S": ed.putString(key, o.getString(tagged)); break;
-                    case "I": ed.putInt(key, o.getInt(tagged)); break;
-                    case "B": ed.putBoolean(key, o.getBoolean(tagged)); break;
-                    case "L": ed.putLong(key, o.getLong(tagged)); break;
+                    case "S": target.putString(key, o.getString(tagged)); break;
+                    case "I": target.putInt(key, o.getInt(tagged)); break;
+                    case "B": target.putBoolean(key, o.getBoolean(tagged)); break;
+                    case "L": target.putLong(key, o.getLong(tagged)); break;
                 }
             }
             ed.apply();
+            swEd.apply();
             return true;
         } catch (Exception e) {
             return false;

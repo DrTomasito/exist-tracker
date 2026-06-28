@@ -194,12 +194,13 @@ public class Stopwatches {
         return out;
     }
 
-    /** Increment a counter by 1 for today (and log it). */
-    public void increment(String id) {
+    /** Increment a counter by 1 for today. Returns the timestamp of the tap,
+     *  so the caller can attach a note to that specific event. */
+    public long increment(String id) {
         SW s = get(id);
-        if (s == null) return;
+        if (s == null) return 0L;
         addToDailyTotal(id, todayStr(), 1);
-        appendLog(id, s.name, todayStr(), 1);
+        return appendLog(id, s.name, todayStr(), 1);
     }
 
     /** Decrement a counter by 1 for today (won't go below 0), for mistaps. */
@@ -214,13 +215,81 @@ public class Stopwatches {
     /** Set today's scale value (1-9) for a scale tracker, replacing any prior
      * value for today. Stored directly, not accumulated. */
     public void setScaleValue(String id, int value) {
+        setScaleValueWithNote(id, value, null);
+    }
+
+    /** Set today's scale value AND optionally its note, in one atomic save.
+     *  Passing note=null leaves any existing note untouched; passing a string
+     *  (including "") sets it. This is how sliders save value + note together. */
+    public void setScaleValueWithNote(String id, int value, String note) {
         SW s = get(id);
         if (s == null) return;
         if (value < 1) value = 1;
         if (value > 9) value = 9;
         prefs.edit().putInt("total_" + id + "_" + todayStr(), value).apply();
-        // Replace today's log entry rather than stacking duplicates.
-        replaceTodayLog(id, s.name, todayStr(), value);
+        // Replace today's entry; carry forward existing note unless a new one given.
+        replaceTodayLog(id, s.name, todayStr(), value, note);
+    }
+
+    /** Counter notes attach to a SPECIFIC tap event, identified by its timestamp.
+     *  Set/replace the note on the log entry with this timestamp. */
+    public void setNoteByTs(long ts, String note) {
+        try {
+            JSONArray arr = new JSONArray(prefs.getString("log", "[]"));
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                if (o.optLong("ts") == ts) {
+                    o.put("note", note == null ? "" : note);
+                    prefs.edit().putString("log", arr.toString()).apply();
+                    return;
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    /** Get the note on the log entry with this timestamp (empty if none). */
+    public String getNoteByTs(long ts) {
+        try {
+            JSONArray arr = new JSONArray(prefs.getString("log", "[]"));
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                if (o.optLong("ts") == ts) return o.optString("note", "");
+            }
+        } catch (Exception ignored) {}
+        return "";
+    }
+
+    /** Timestamp of the most recent tap/event for this tracker TODAY, or 0 if
+     *  none today. Used so a counter's "note last tap" targets the right event. */
+    public long lastEventTsToday(String id) {
+        String today = todayStr();
+        long best = 0L;
+        try {
+            JSONArray arr = new JSONArray(prefs.getString("log", "[]"));
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                if (id.equals(o.optString("id")) && today.equals(o.optString("date"))) {
+                    long ts = o.optLong("ts");
+                    if (ts > best) best = ts;
+                }
+            }
+        } catch (Exception ignored) {}
+        return best;
+    }
+
+    /** Today's scale note for a tracker (empty string if none). Sliders only. */
+    public String getScaleNoteToday(String id) {
+        String today = todayStr();
+        try {
+            JSONArray arr = new JSONArray(prefs.getString("log", "[]"));
+            for (int i = arr.length() - 1; i >= 0; i--) {
+                JSONObject o = arr.getJSONObject(i);
+                if (id.equals(o.optString("id")) && today.equals(o.optString("date"))) {
+                    return o.optString("note", "");
+                }
+            }
+        } catch (Exception ignored) {}
+        return "";
     }
 
     // ---------- Run controls ----------
@@ -304,6 +373,7 @@ public class Stopwatches {
         public String id, name, date;
         public int minutes;
         public long ts;
+        public String note = "";
     }
 
     public List<LogEntry> getLog(int limit) {
@@ -318,23 +388,26 @@ public class Stopwatches {
                 e.date = o.optString("date");
                 e.minutes = o.optInt("minutes");
                 e.ts = o.optLong("ts");
+                e.note = o.optString("note", "");
                 out.add(e);
             }
         } catch (Exception ignored) {}
         return out;
     }
 
-    private void appendLog(String id, String name, String date, int minutes) {
+    private long appendLog(String id, String name, String date, int minutes) {
+        long ts = System.currentTimeMillis();
         try {
             JSONArray arr = new JSONArray(prefs.getString("log", "[]"));
             JSONObject o = new JSONObject();
             o.put("id", id); o.put("name", name); o.put("date", date);
-            o.put("minutes", minutes); o.put("ts", System.currentTimeMillis());
+            o.put("minutes", minutes); o.put("ts", ts);
             arr.put(o);
             // Keep the log from growing without bound: cap at 500 entries.
             while (arr.length() > 500) arr.remove(0);
             prefs.edit().putString("log", arr.toString()).apply();
         } catch (Exception ignored) {}
+        return ts;
     }
 
     public void deleteLogEntry(long ts) {
@@ -361,17 +434,30 @@ public class Stopwatches {
 
     /** Replace today's log entry for a tracker (used by scale: one value/day). */
     private void replaceTodayLog(String id, String name, String date, int value) {
+        replaceTodayLog(id, name, date, value, null);
+    }
+
+    /** Replace today's entry for a tracker. If newNote is null, carry forward any
+     *  existing note; otherwise set the note to newNote (may be ""). */
+    private void replaceTodayLog(String id, String name, String date, int value, String newNote) {
         try {
             JSONArray arr = new JSONArray(prefs.getString("log", "[]"));
             JSONArray keep = new JSONArray();
+            String carriedNote = "";
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject o = arr.getJSONObject(i);
-                if (id.equals(o.optString("id")) && date.equals(o.optString("date"))) continue;
+                if (id.equals(o.optString("id")) && date.equals(o.optString("date"))) {
+                    // Carry forward any note from the entry we're replacing.
+                    String n = o.optString("note", "");
+                    if (!n.isEmpty()) carriedNote = n;
+                    continue;
+                }
                 keep.put(o);
             }
             JSONObject o = new JSONObject();
             o.put("id", id); o.put("name", name); o.put("date", date);
             o.put("minutes", value); o.put("ts", System.currentTimeMillis());
+            o.put("note", newNote != null ? newNote : carriedNote);
             keep.put(o);
             while (keep.length() > 500) keep.remove(0);
             prefs.edit().putString("log", keep.toString()).apply();

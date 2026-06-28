@@ -114,7 +114,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private View buildUi() {
+        getWindow().getDecorView().setBackgroundColor(Ui.BG);
         ScrollView scroll = new ScrollView(this);
+        scroll.setBackgroundColor(Ui.BG);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         int pad = dp(16);
@@ -123,6 +125,7 @@ public class MainActivity extends AppCompatActivity {
 
         root.addView(header("Exist Tracker"));
         statusView = new TextView(this);
+        statusView.setTextColor(Ui.TEXT);
         statusView.setPadding(0, dp(4), 0, dp(12));
         root.addView(statusView);
         root.addView(Ui.navRow(this, "settings"));
@@ -275,6 +278,7 @@ public class MainActivity extends AppCompatActivity {
         final String[] modes = {"exist", "jsonbin", "off"};
         final String[] modeLabels = {"Exist (recommended)", "jsonbin (fallback)", "Off"};
         TextView modeView = new TextView(this);
+ modeView.setTextColor(Ui.TEXT);
         modeView.setPadding(0, dp(4), 0, dp(4));
         Runnable showMode = () -> modeView.setText("Current: "
                 + modeLabels[indexOf(modes, settings.getRelayMode())]);
@@ -298,12 +302,14 @@ public class MainActivity extends AppCompatActivity {
 
         root.addView(note("Exist relay: the attribute names the extension writes to."));
         EditText distractAttr = new EditText(this);
+        darkEt(distractAttr);
         distractAttr.setHint("Distractions attribute (e.g. work_distractions)");
         distractAttr.setText(settings.getRelayDistractAttr());
         fieldSavers.add(() -> settings.setRelayDistractAttr(distractAttr.getText().toString().trim()));
         root.addView(distractAttr);
 
         EditText ytAttr = new EditText(this);
+        darkEt(ytAttr);
         ytAttr.setHint("Work-YouTube attribute (e.g. work_youtube)");
         ytAttr.setText(settings.getRelayYoutubeAttr());
         fieldSavers.add(() -> settings.setRelayYoutubeAttr(ytAttr.getText().toString().trim()));
@@ -312,12 +318,14 @@ public class MainActivity extends AppCompatActivity {
         root.addView(note("jsonbin fallback: paste the Bin ID and Access Key from "
                 + "your jsonbin.io account (only needed if using jsonbin mode)."));
         EditText binId = new EditText(this);
+        darkEt(binId);
         binId.setHint("jsonbin Bin ID");
         binId.setText(settings.getJsonbinId());
         fieldSavers.add(() -> settings.setJsonbinId(binId.getText().toString().trim()));
         root.addView(binId);
 
         EditText binKey = new EditText(this);
+        darkEt(binKey);
         binKey.setHint("jsonbin Access Key");
         binKey.setText(settings.getJsonbinKey());
         fieldSavers.add(() -> settings.setJsonbinKey(binKey.getText().toString().trim()));
@@ -338,18 +346,21 @@ public class MainActivity extends AppCompatActivity {
         root.addView(locOn);
 
         EditText serverUrl = new EditText(this);
+        darkEt(serverUrl);
         serverUrl.setHint("Backend server URL (e.g. https://together-time.onrender.com)");
         serverUrl.setText(settings.getTogetherServerUrl());
         fieldSavers.add(() -> settings.setTogetherServerUrl(serverUrl.getText().toString().trim()));
         root.addView(serverUrl);
 
         EditText secret = new EditText(this);
+        darkEt(secret);
         secret.setHint("Shared secret (matches backend SHARED_SECRET)");
         secret.setText(settings.getTogetherSecret());
         fieldSavers.add(() -> settings.setTogetherSecret(secret.getText().toString().trim()));
         root.addView(secret);
 
         EditText deviceId = new EditText(this);
+        darkEt(deviceId);
         deviceId.setHint("My device id (must match backend MY_DEVICE_ID, e.g. tj)");
         deviceId.setText(settings.getMyDeviceId());
         fieldSavers.add(() -> settings.setMyDeviceId(deviceId.getText().toString().trim()));
@@ -387,8 +398,10 @@ public class MainActivity extends AppCompatActivity {
         TextView t = new TextView(this);
         t.setText(label);
         t.setTextSize(13);
+        t.setTextColor(Ui.TEXT);
         box.addView(t);
         EditText attr = new EditText(this);
+        darkEt(attr);
         attr.setText(get.get());
         fieldSavers.add(() -> set.set(attr.getText().toString().trim()));
         box.addView(attr);
@@ -415,6 +428,7 @@ public class MainActivity extends AppCompatActivity {
         int p = dp(16); l.setPadding(p, p, p, p);
 
         TextView hint = new TextView(this);
+ hint.setTextColor(Ui.TEXT);
         hint.setText("Paste the Access token and Refresh token from your Exist "
                 + "app page. (Client ID & Secret are also needed so the app can "
                 + "auto-refresh — set those in the other button if you haven't.)");
@@ -422,11 +436,13 @@ public class MainActivity extends AppCompatActivity {
         l.addView(hint);
 
         EditText access = new EditText(this);
+        darkEt(access);
         access.setHint("Access token");
         access.setText(settings.getAccessToken());
         l.addView(access);
 
         EditText refresh = new EditText(this);
+        darkEt(refresh);
         refresh.setHint("Refresh token");
         refresh.setText(settings.getRefreshToken());
         l.addView(refresh);
@@ -452,11 +468,13 @@ public class MainActivity extends AppCompatActivity {
         int p = dp(16); l.setPadding(p, p, p, p);
 
         EditText id = new EditText(this);
+        darkEt(id);
         id.setHint("Client ID");
         id.setText(settings.getClientId());
         l.addView(id);
 
         EditText secret = new EditText(this);
+        darkEt(secret);
         secret.setHint("Client Secret");
         secret.setText(settings.getClientSecret());
         l.addView(secret);
@@ -489,6 +507,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void promptForCode() {
         EditText input = new EditText(this);
+        darkEt(input);
         input.setHint("Paste the code from the address bar");
         new AlertDialog.Builder(this)
                 .setTitle("Finish connecting")
@@ -538,10 +557,11 @@ public class MainActivity extends AppCompatActivity {
         TextView t = new TextView(this);
         t.setText(title);
         t.setTextSize(16);
-        t.setTextColor(Color.parseColor("#1565C0"));
+        t.setTextColor(Ui.ACCENT);
         box.addView(t);
 
         EditText attr = new EditText(this);
+        darkEt(attr);
         attr.setHint("Exist attribute name (e.g. hospital_time)");
         attr.setText(attrGet.get());
         attr.setInputType(InputType.TYPE_CLASS_TEXT);
@@ -558,6 +578,7 @@ public class MainActivity extends AppCompatActivity {
         box.addView(choose);
 
         EditText det = new EditText(this);
+        darkEt(det);
         det.setHint(detailLabel);
         det.setText(detGet.get());
         fieldSavers.add(() -> detSet.set(det.getText().toString().trim()));
@@ -627,6 +648,7 @@ public class MainActivity extends AppCompatActivity {
         box.addView(cb);
 
         EditText attr = new EditText(this);
+        darkEt(attr);
         attr.setHint("Attribute name");
         attr.setText(settings.getAttrFor(metric, defaultAttr));
         fieldSavers.add(() -> settings.setAttrFor(metric, attr.getText().toString().trim()));
@@ -690,18 +712,18 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView header(String txt) {
         TextView t = new TextView(this);
-        t.setText(txt); t.setTextSize(24); t.setTextColor(Color.BLACK);
+        t.setText(txt); t.setTextSize(24); t.setTextColor(Ui.TEXT);
         return t;
     }
     private TextView section(String txt) {
         TextView t = new TextView(this);
         t.setText(txt); t.setTextSize(18); t.setPadding(0, dp(20), 0, dp(6));
-        t.setTextColor(Color.parseColor("#0D47A1"));
+        t.setTextColor(Ui.ACCENT);
         return t;
     }
     private TextView note(String txt) {
         TextView t = new TextView(this);
-        t.setText(txt); t.setTextSize(13); t.setTextColor(Color.DKGRAY);
+        t.setText(txt); t.setTextSize(13); t.setTextColor(Ui.MUTED);
         t.setPadding(0, 0, 0, dp(6));
         return t;
     }
@@ -709,5 +731,12 @@ public class MainActivity extends AppCompatActivity {
         Button b = new Button(this); b.setText(txt); b.setOnClickListener(l); return b;
     }
     private void toast(String s) { Toast.makeText(this, s, Toast.LENGTH_SHORT).show(); }
+    /** Style an EditText to be readable on the dark background. */
+    private EditText darkEt(EditText e) {
+        e.setTextColor(Ui.TEXT);
+        e.setHintTextColor(Ui.MUTED);
+        return e;
+    }
+
     private int dp(int v) { return (int) (v * getResources().getDisplayMetrics().density); }
 }

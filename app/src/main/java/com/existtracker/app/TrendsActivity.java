@@ -29,7 +29,9 @@ public class TrendsActivity extends AppCompatActivity {
     }
 
     private View build() {
+        getWindow().getDecorView().setBackgroundColor(Ui.BG);
         ScrollView scroll = new ScrollView(this);
+        scroll.setBackgroundColor(Ui.BG);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         int p = dp(16);
@@ -39,7 +41,7 @@ public class TrendsActivity extends AppCompatActivity {
         TextView h = new TextView(this);
         h.setText("Weekly Trends");
         h.setTextSize(24);
-        h.setTextColor(Color.BLACK);
+        h.setTextColor(Ui.TEXT);
         h.setPadding(0, 0, 0, dp(4));
         root.addView(h);
 
@@ -47,7 +49,7 @@ public class TrendsActivity extends AppCompatActivity {
         sub.setText("Each point is one work week's average (Monday–Friday). "
                 + "Charts fill in as the app posts each night.");
         sub.setTextSize(13);
-        sub.setTextColor(Color.DKGRAY);
+        sub.setTextColor(Ui.MUTED);
         sub.setPadding(0, 0, 0, dp(12));
         root.addView(sub);
         root.addView(Ui.navRow(this, "trends"));
@@ -63,7 +65,7 @@ public class TrendsActivity extends AppCompatActivity {
         TextView bd = new TextView(this);
         bd.setText("Today's breakdown");
         bd.setTextSize(18);
-        bd.setTextColor(Color.parseColor("#0D47A1"));
+        bd.setTextColor(Ui.ACCENT);
         bd.setPadding(0, dp(18), 0, dp(6));
         root.addView(bd);
 
@@ -84,14 +86,14 @@ public class TrendsActivity extends AppCompatActivity {
                     + " awake, " + fmt(sleep) + " asleep.");
         }
         homeLine.setTextSize(13);
-        homeLine.setTextColor(Color.parseColor("#37474F"));
+        homeLine.setTextColor(Ui.MUTED);
         homeLine.setPadding(dp(4), dp(2), dp(4), dp(6));
         root.addView(homeLine);
 
         TextView screenLine = new TextView(this);
         screenLine.setText("Phone screen in use today: " + fmt(settings.getScreenMin()) + ".");
         screenLine.setTextSize(13);
-        screenLine.setTextColor(Color.parseColor("#37474F"));
+        screenLine.setTextColor(Ui.MUTED);
         screenLine.setPadding(dp(4), 0, dp(4), dp(10));
         root.addView(screenLine);
 
@@ -140,7 +142,7 @@ public class TrendsActivity extends AppCompatActivity {
             TextView ins = new TextView(this);
             ins.setText(Trends.describeTrend(weeks, s.name));
             ins.setTextSize(13);
-            ins.setTextColor(Color.parseColor("#37474F"));
+            ins.setTextColor(Ui.MUTED);
             ins.setPadding(dp(4), 0, dp(4), dp(16));
             root.addView(ins);
         }
@@ -176,7 +178,7 @@ public class TrendsActivity extends AppCompatActivity {
         String label = title.split(" —")[0];
         insight.setText(Trends.describeTrend(weeks, label));
         insight.setTextSize(13);
-        insight.setTextColor(Color.parseColor("#37474F"));
+        insight.setTextColor(Ui.MUTED);
         insight.setPadding(dp(4), 0, dp(4), dp(16));
         root.addView(insight);
     }
@@ -190,7 +192,7 @@ public class TrendsActivity extends AppCompatActivity {
         t.setText(name + ": " + fmt(total) + " today  ·  Work " + fmt(work) + " (" + pctW
                 + "), Home " + fmt(home) + " (" + pctH + "), Away " + fmt(away) + " (" + pctA + ")");
         t.setTextSize(13);
-        t.setTextColor(Color.parseColor("#37474F"));
+        t.setTextColor(Ui.MUTED);
         t.setPadding(dp(4), dp(2), dp(4), dp(2));
         return t;
     }

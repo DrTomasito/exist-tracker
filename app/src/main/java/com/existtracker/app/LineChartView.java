@@ -23,6 +23,9 @@ public class LineChartView extends View {
     private String title = "";
     private int lineColor = Color.parseColor("#1565C0");
     private boolean clockMode = false;
+    private boolean scaleMode = false;       // 1-9 scale display
+    private double refLineY = Double.NaN;     // optional horizontal reference line
+    private int refLineColor = Color.parseColor("#90A4C0");
 
     private final Paint axis = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint grid = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -35,10 +38,10 @@ public class LineChartView extends View {
         super(ctx);
         float d = getResources().getDisplayMetrics().density;
 
-        axis.setColor(Color.parseColor("#9E9E9E"));
+        axis.setColor(Color.parseColor("#90A4C0"));   // muted blue-grey
         axis.setStrokeWidth(2 * d);
 
-        grid.setColor(Color.parseColor("#ECECEC"));
+        grid.setColor(Color.parseColor("#2A3B55"));    // subtle dark gridline
         grid.setStrokeWidth(1 * d);
 
         line.setColor(lineColor);
@@ -49,10 +52,10 @@ public class LineChartView extends View {
         dot.setColor(lineColor);
         dot.setStyle(Paint.Style.FILL);
 
-        text.setColor(Color.parseColor("#555555"));
+        text.setColor(Color.parseColor("#90A4C0"));    // light muted labels
         text.setTextSize(11 * d);
 
-        titlePaint.setColor(Color.parseColor("#0D47A1"));
+        titlePaint.setColor(Color.parseColor("#E8EEF6")); // light title
         titlePaint.setTextSize(15 * d);
         titlePaint.setFakeBoldText(true);
 
@@ -72,6 +75,19 @@ public class LineChartView extends View {
         this.labels = labels;
         this.values = values;
         this.clockMode = clockMode;
+        invalidate();
+    }
+
+    /** Display as a 1-9 scale (y-axis 1..9) instead of time. */
+    public void setScaleMode(boolean on) {
+        this.scaleMode = on;
+        invalidate();
+    }
+
+    /** Draw a dashed horizontal reference line at the given y data-value. */
+    public void setReferenceLine(double y, int color) {
+        this.refLineY = y;
+        this.refLineColor = color;
         invalidate();
     }
 
@@ -102,6 +118,8 @@ public class LineChartView extends View {
             // Scale to roughly an hour below earliest and above latest.
             base = Math.max(0, Math.floor((minV - 60) / 60) * 60);
             niceMax = Math.ceil((maxV + 30) / 60) * 60;
+        } else if (scaleMode) {
+            base = 1; niceMax = 9; // fixed 1-9 scale
         } else {
             base = 0;
             niceMax = niceCeil(maxV);
@@ -115,8 +133,21 @@ public class LineChartView extends View {
             c.drawLine(padL, y, padL + plotW, y, grid);
             double val = base + span * (lines - i) / lines;
             String lbl = clockMode ? Trends.minToClock(val)
-                    : String.format(Locale.US, "%.1fh", val / 60.0);
+                    : (scaleMode ? String.format(Locale.US, "%.0f", val)
+                    : String.format(Locale.US, "%.1fh", val / 60.0));
             c.drawText(lbl, 4 * d, y + 4 * d, text);
+        }
+
+        // optional dashed reference line (e.g. neutral 5 on a scale)
+        if (!Double.isNaN(refLineY) && refLineY >= base && refLineY <= niceMax) {
+            Paint refPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            refPaint.setColor(refLineColor);
+            refPaint.setStrokeWidth(1.5f * d);
+            refPaint.setStyle(Paint.Style.STROKE);
+            refPaint.setPathEffect(new android.graphics.DashPathEffect(
+                    new float[]{6 * d, 5 * d}, 0));
+            float ry = padT + (float) (plotH * (niceMax - refLineY) / span);
+            c.drawLine(padL, ry, padL + plotW, ry, refPaint);
         }
 
         // axes

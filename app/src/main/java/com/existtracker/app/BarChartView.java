@@ -31,16 +31,16 @@ public class BarChartView extends View {
         super(ctx);
         float d = getResources().getDisplayMetrics().density;
         bar.setStyle(Paint.Style.FILL);
-        text.setColor(Color.parseColor("#555555"));
+        text.setColor(Color.parseColor("#90A4C0"));
         text.setTextSize(11 * d);
         text.setTextAlign(Paint.Align.CENTER);
-        valText.setColor(Color.parseColor("#333333"));
+        valText.setColor(Color.parseColor("#E8EEF6"));
         valText.setTextSize(10 * d);
         valText.setTextAlign(Paint.Align.CENTER);
-        titlePaint.setColor(Color.parseColor("#0D47A1"));
+        titlePaint.setColor(Color.parseColor("#E8EEF6"));
         titlePaint.setTextSize(15 * d);
         titlePaint.setFakeBoldText(true);
-        grid.setColor(Color.parseColor("#ECECEC"));
+        grid.setColor(Color.parseColor("#2A3B55"));
         grid.setStrokeWidth(1 * d);
         setMinimumHeight((int) (200 * d));
     }

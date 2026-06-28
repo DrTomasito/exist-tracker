@@ -250,39 +250,108 @@ public class StopwatchActivity extends AppCompatActivity {
             sCol.setOrientation(LinearLayout.VERTICAL);
             sCol.setPadding(0, Ui.dp(this, 10), 0, 0);
             final TextView valLabel = new TextView(this);
-            int cur = todayTotal >= 1 ? todayTotal : 5; // default mid if unset
-            valLabel.setText("Set value: " + cur + " / 9");
+            // Slider always rests at neutral 5, ready for a fresh entry. Today's
+            // saved value (if any) is shown in the "live" label above the card.
+            int restPos = 5;
+            valLabel.setText(todayTotal >= 1
+                    ? "Saved today: " + todayTotal + " / 9  ·  slide to update"
+                    : "Set value: 5 / 9  (neutral)");
             valLabel.setTextColor(Ui.TEXT);
             valLabel.setTextSize(14);
             sCol.addView(valLabel);
             android.widget.SeekBar bar = new android.widget.SeekBar(this);
             bar.setMax(8);
-            bar.setProgress(cur - 1);
+            bar.setProgress(restPos - 1);
             bar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
                 public void onProgressChanged(android.widget.SeekBar sb, int p, boolean fromUser) {
-                    valLabel.setText("Set value: " + (p + 1) + " / 9");
+                    valLabel.setText("Set value: " + (p + 1) + " / 9"
+                            + (p + 1 == 5 ? "  (neutral)" : ""));
                 }
                 public void onStartTrackingTouch(android.widget.SeekBar sb) {}
                 public void onStopTrackingTouch(android.widget.SeekBar sb) {}
             });
             sCol.addView(bar);
+
+            // Optional note, built right into the slider. One Save stores both
+            // the value (→ Exist as scale) and the note (local, for later insight).
+            final EditText noteEt = new EditText(this);
+            noteEt.setHint("Optional note (why this rating?) — saved for later");
+            noteEt.setInputType(InputType.TYPE_CLASS_TEXT
+                    | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                    | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+            noteEt.setTextColor(Ui.TEXT);
+            noteEt.setHintTextColor(Ui.MUTED);
+            noteEt.setTextSize(13);
+            noteEt.setMinLines(2);
+            noteEt.setText(store.getScaleNoteToday(s.id)); // show today's note if any
+            sCol.addView(noteEt);
+
             LinearLayout sRow = new LinearLayout(this);
             sRow.setOrientation(LinearLayout.HORIZONTAL);
-            sRow.addView(ctrlButton("Save value", () -> {
-                store.setScaleValue(s.id, bar.getProgress() + 1);
-                toast("Saved " + (bar.getProgress() + 1) + " for " + s.name);
-                rebuild();
+            sRow.addView(ctrlButton("Save", () -> {
+                String note = noteEt.getText().toString().trim();
+                // Save value + note in one atomic action — order never matters.
+                store.setScaleValueWithNote(s.id, bar.getProgress() + 1, note);
+                toast("Saved " + (bar.getProgress() + 1) + " for " + s.name
+                        + (note.isEmpty() ? "" : " + note"));
+                rebuild(); // resets slider back to neutral 5
             }));
             sCol.addView(sRow);
             card.addView(sCol);
         }
 
         name.setOnLongClickListener(v -> { editDialog(s, s.type); return true; });
+
+        // COUNTERS ONLY: an optional "note last tap" link. Tapping +1 stays
+        // instant; this lets you annotate the most recent tap if you want.
+        // (Timers get no notes; sliders have their note built into the slider.)
+        if (s.isCounter()) {
+            long lastTs = store.lastEventTsToday(s.id);
+            if (lastTs > 0) {
+                String tapNote = store.getNoteByTs(lastTs);
+                TextView noteBtn = new TextView(this);
+                noteBtn.setText(tapNote.isEmpty()
+                        ? "✎ note last tap" : "✎ note on last tap (edit)");
+                noteBtn.setTextColor(tapNote.isEmpty() ? Ui.MUTED : Ui.ACCENT);
+                noteBtn.setTextSize(13);
+                noteBtn.setPadding(0, Ui.dp(this, 10), 0, 0);
+                final long ts = lastTs;
+                noteBtn.setOnClickListener(v -> showTapNoteDialog(s, ts));
+                card.addView(noteBtn);
+            }
+        }
+
         TextView editHint = Ui.label(this, "Long-press the name to edit, pin, or delete.");
         editHint.setTextSize(11);
         editHint.setPadding(0, Ui.dp(this, 8), 0, 0);
         card.addView(editHint);
         return card;
+    }
+
+    /** Counter note dialog — attaches a note to a SPECIFIC tap (by timestamp). */
+    private void showTapNoteDialog(Stopwatches.SW s, long ts) {
+        EditText input = new EditText(this);
+        input.setHint("Optional note about this one — saved for later insight");
+        input.setInputType(InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        input.setMinLines(3);
+        input.setText(store.getNoteByTs(ts));
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int p = Ui.dp(this, 16);
+        box.setPadding(p, p, p, p);
+        box.addView(input);
+        new AlertDialog.Builder(this)
+                .setTitle("Note — " + s.name)
+                .setView(box)
+                .setPositiveButton("Save", (d, w) -> {
+                    store.setNoteByTs(ts, input.getText().toString().trim());
+                    toast("Note saved");
+                    rebuild();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private View arrowBtn(String glyph, boolean enabled, Runnable action) {
