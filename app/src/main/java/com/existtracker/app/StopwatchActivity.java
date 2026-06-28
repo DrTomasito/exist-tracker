@@ -245,7 +245,7 @@ public class StopwatchActivity extends AppCompatActivity {
             controls.addView(ctrlButton("−1 (undo)", () -> { store.decrement(s.id); rebuild(); }));
             card.addView(controls);
         } else if (s.isScale()) {
-            // Slider from 1 to 9. SeekBar is 0-8 internally; display +1.
+            // Slider from 1 to 9 (custom view: gradient track, ticks, beefy thumb).
             LinearLayout sCol = new LinearLayout(this);
             sCol.setOrientation(LinearLayout.VERTICAL);
             sCol.setPadding(0, Ui.dp(this, 10), 0, 0);
@@ -259,17 +259,15 @@ public class StopwatchActivity extends AppCompatActivity {
             valLabel.setTextColor(Ui.TEXT);
             valLabel.setTextSize(14);
             sCol.addView(valLabel);
-            android.widget.SeekBar bar = new android.widget.SeekBar(this);
-            bar.setMax(8);
-            bar.setProgress(restPos - 1);
-            bar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
-                public void onProgressChanged(android.widget.SeekBar sb, int p, boolean fromUser) {
-                    valLabel.setText("Set value: " + (p + 1) + " / 9"
-                            + (p + 1 == 5 ? "  (neutral)" : ""));
-                }
-                public void onStartTrackingTouch(android.widget.SeekBar sb) {}
-                public void onStopTrackingTouch(android.widget.SeekBar sb) {}
-            });
+
+            final ScaleSlider bar = new ScaleSlider(this);
+            bar.setValue(restPos);
+            bar.setOnValueChanged(v ->
+                    valLabel.setText("Set value: " + v + " / 9"
+                            + (v == 5 ? "  (neutral)" : "")));
+            bar.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT));
             sCol.addView(bar);
 
             // Optional note, built right into the slider. One Save stores both
@@ -291,8 +289,8 @@ public class StopwatchActivity extends AppCompatActivity {
             sRow.addView(ctrlButton("Save", () -> {
                 String note = noteEt.getText().toString().trim();
                 // Save value + note in one atomic action — order never matters.
-                store.setScaleValueWithNote(s.id, bar.getProgress() + 1, note);
-                toast("Saved " + (bar.getProgress() + 1) + " for " + s.name
+                store.setScaleValueWithNote(s.id, bar.getValue(), note);
+                toast("Saved " + bar.getValue() + " for " + s.name
                         + (note.isEmpty() ? "" : " + note"));
                 rebuild(); // resets slider back to neutral 5
             }));

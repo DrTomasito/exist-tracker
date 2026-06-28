@@ -88,6 +88,7 @@ public class Settings {
                 .putInt("c_together", 0)
                 .apply();
         clearArrivalDeparture();
+        clearHomeArrival();
     }
 
     // ----- App-usage split by location (work / home / away), minutes -----
@@ -140,6 +141,19 @@ public class Settings {
     public void saveDeparture(String date, int minOfDay) { prefs.edit().putInt("dep_" + date, minOfDay).apply(); }
     public java.util.TreeMap<String, Integer> getArrivalHistory()   { return scan("arr_"); }
     public java.util.TreeMap<String, Integer> getDepartureHistory() { return scan("dep_"); }
+
+    // ----- "Got home from work" arrival time (minutes-since-midnight) -----
+    // Detected via home WiFi connect after leaving work that day. SSID-only.
+    public int getHomeArrivalToday() { return prefs.getInt("home_arrival_today", -1); }
+    public void setHomeArrivalToday(int minOfDay) { prefs.edit().putInt("home_arrival_today", minOfDay).apply(); }
+    // Latch: have we left work since arriving today? (gates home-arrival capture)
+    public boolean getLeftWorkToday() { return prefs.getBoolean("left_work_today", false); }
+    public void setLeftWorkToday(boolean v) { prefs.edit().putBoolean("left_work_today", v).apply(); }
+    public void clearHomeArrival() {
+        prefs.edit().putInt("home_arrival_today", -1).putBoolean("left_work_today", false).apply();
+    }
+    public void saveHomeArrival(String date, int minOfDay) { prefs.edit().putInt("homearr_" + date, minOfDay).apply(); }
+    public java.util.TreeMap<String, Integer> getHomeArrivalHistory() { return scan("homearr_"); }
 
     private java.util.TreeMap<String, Integer> scan(String prefix) {
         java.util.TreeMap<String, Integer> out = new java.util.TreeMap<>();

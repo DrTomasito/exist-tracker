@@ -252,6 +252,12 @@ public class MainActivity extends AppCompatActivity {
         root.addView(postToggle("Social at work", "soc_work", "social_at_work"));
         root.addView(postToggle("Social at home", "soc_home", "social_at_home"));
 
+        // Arrival times (time-of-day, value_type 4). Detected via WiFi SSID only.
+        root.addView(note("Arrival times below post as a time-of-day value. "
+                + "When creating a new attribute, pick \"Time of day\"."));
+        root.addView(postToggle("Got home from work (time)", "home_arrival", "got_home_time"));
+        root.addView(postToggle("Got to work (time)", "work_arrival", "got_to_work_time"));
+
         // --- Step 6: backup / restore ---
         root.addView(section("Step 6 — Backup & restore"));
         root.addView(note("Save all your settings (and history) to a file so a new "

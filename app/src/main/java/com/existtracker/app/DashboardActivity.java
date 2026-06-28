@@ -73,6 +73,9 @@ public class DashboardActivity extends AppCompatActivity {
         workCard.addView(hint);
         root.addView(workCard);
 
+        // --- Got home from work (yesterday + this week) ---
+        root.addView(buildHomeByCard());
+
         // --- Pinned counters/timers (configurable in the Counters tab) ---
         addPinnedTrackers(root);
 
@@ -229,6 +232,100 @@ public class DashboardActivity extends AppCompatActivity {
         return String.format(java.util.Locale.US, "%04d-%02d-%02d",
                 monday.get(java.util.Calendar.YEAR), monday.get(java.util.Calendar.MONTH) + 1,
                 monday.get(java.util.Calendar.DAY_OF_MONTH));
+    }
+
+    private String fmtCal(java.util.Calendar c) {
+        return String.format(java.util.Locale.US, "%04d-%02d-%02d",
+                c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH) + 1,
+                c.get(java.util.Calendar.DAY_OF_MONTH));
+    }
+
+    private String todayKey() {
+        return fmtCal(java.util.Calendar.getInstance());
+    }
+
+    private String dateNDaysAgo(int n) {
+        java.util.Calendar c = java.util.Calendar.getInstance();
+        c.add(java.util.Calendar.DAY_OF_MONTH, -n);
+        return fmtCal(c);
+    }
+
+    /** Date keys Monday..Sunday for the current week (ISO-style, Monday first). */
+    private java.util.List<String> thisWeekDateKeys() {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        java.util.Calendar c = java.util.Calendar.getInstance();
+        // Move back to Monday of this week.
+        int dow = c.get(java.util.Calendar.DAY_OF_WEEK); // Sun=1..Sat=7
+        int back = (dow == java.util.Calendar.SUNDAY) ? 6 : dow - java.util.Calendar.MONDAY;
+        c.add(java.util.Calendar.DAY_OF_MONTH, -back);
+        for (int i = 0; i < 7; i++) {
+            out.add(fmtCal(c));
+            c.add(java.util.Calendar.DAY_OF_MONTH, 1);
+        }
+        return out;
+    }
+
+    /** "Got home" card: yesterday's arrival time (reference) + this week's list.
+     *  All SSID-derived (no GPS). Shows "—" for days with no captured arrival. */
+    private View buildHomeByCard() {
+        LinearLayout card = Ui.card(this);
+        card.addView(Ui.eyebrow(this, "Got home from work"));
+
+        java.util.TreeMap<String, Integer> hist = settings.getHomeArrivalHistory();
+
+        // Yesterday's arrival as the headline reference.
+        String yKey = dateNDaysAgo(1);
+        Integer yMin = hist.get(yKey);
+        // If today's already captured (rare to look mid-evening), show it too.
+        int todayMin = settings.getHomeArrivalToday();
+
+        LinearLayout row = Ui.statRow(this);
+        row.addView(Ui.statCell(this,
+                yMin != null ? Trends.minToClock(yMin) : "—",
+                "Yesterday", Ui.GOOD));
+        row.addView(Ui.statCell(this,
+                todayMin >= 0 ? Trends.minToClock(todayMin) : "—",
+                "Today", Ui.ACCENT));
+        card.addView(row);
+
+        // This week (Mon–today): one compact line per day with a time or dash.
+        TextView wk = Ui.label(this, "This week");
+        wk.setPadding(Ui.dp(this,4), Ui.dp(this,10), 0, Ui.dp(this,2));
+        card.addView(wk);
+
+        String[] dayNames = {"Mon","Tue","Wed","Thu","Fri","Sat","Sun"};
+        java.util.List<String> weekKeys = thisWeekDateKeys(); // Mon..Sun
+        boolean any = false;
+        for (int i = 0; i < weekKeys.size(); i++) {
+            String k = weekKeys.get(i);
+            Integer m = hist.get(k);
+            if (m == null && k.equals(todayKey()) && todayMin >= 0) m = todayMin;
+            if (m != null) any = true;
+            LinearLayout line = new LinearLayout(this);
+            line.setOrientation(LinearLayout.HORIZONTAL);
+            line.setPadding(Ui.dp(this,4), Ui.dp(this,2), Ui.dp(this,4), Ui.dp(this,2));
+            TextView dn = new TextView(this);
+            dn.setText(dayNames[i]);
+            dn.setTextColor(Ui.MUTED);
+            dn.setTextSize(13);
+            dn.setLayoutParams(new LinearLayout.LayoutParams(Ui.dp(this,44),
+                    LinearLayout.LayoutParams.WRAP_CONTENT));
+            TextView tv = new TextView(this);
+            tv.setText(m != null ? Trends.minToClock(m) : "—");
+            tv.setTextColor(m != null ? Ui.TEXT : Ui.MUTED);
+            tv.setTextSize(13);
+            line.addView(dn);
+            line.addView(tv);
+            card.addView(line);
+        }
+
+        TextView note = Ui.label(this, any
+                ? "Detected when your phone joins home WiFi after leaving work."
+                : "Fills in once you head home from work on a tracked day.");
+        note.setTextSize(11);
+        note.setPadding(Ui.dp(this,4), Ui.dp(this,6), Ui.dp(this,4), 0);
+        card.addView(note);
+        return card;
     }
 
     /** "This Week So Far" — weekly totals for key time metrics + each timer. */

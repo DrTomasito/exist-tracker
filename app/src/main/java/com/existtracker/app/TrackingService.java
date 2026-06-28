@@ -131,10 +131,13 @@ public class TrackingService extends Service {
         // --- WiFi SSID ---
         String ssid = currentSsid();
         currentBucket = "away";
+        boolean onWorkNow = false;
+        boolean onHomeNow = false;
         if (ssid != null) {
             if (ssid.equalsIgnoreCase(settings.getHospitalSsid())) {
                 settings.addHospital(minutes);
                 currentBucket = "work";
+                onWorkNow = true;
                 // Arrival = first time we see work WiFi today; departure keeps
                 // updating to the latest time we still see it.
                 int minOfDay = minuteOfDayNow();
@@ -144,7 +147,29 @@ public class TrackingService extends Service {
             if (ssid.equalsIgnoreCase(settings.getHomeSsid())) {
                 settings.addHome(minutes);
                 currentBucket = "home";
+                onHomeNow = true;
             }
+        }
+
+        // --- "Got home from work" detection (SSID-only, no GPS) ---
+        // Rule: log the FIRST connect to home WiFi that happens AFTER we have been
+        // on work WiFi today and then left it. We track whether we were on work
+        // today (arrival is set) and whether we've since left work (not on work now
+        // after having been). Only the first qualifying home connect is recorded.
+        if (onWorkNow) {
+            // Currently at work — mark that we've been to work, and clear the
+            // "left work" latch (we're back/here, so a later home connect counts).
+            settings.setLeftWorkToday(false);
+        } else if (settings.getArrivalToday() >= 0 && !onHomeNow) {
+            // Been to work today, and right now not at work and not at home
+            // (i.e. in transit / elsewhere) → we've left work.
+            settings.setLeftWorkToday(true);
+        }
+        if (onHomeNow
+                && settings.getArrivalToday() >= 0      // went to work today
+                && settings.getLeftWorkToday()           // and have since left it
+                && settings.getHomeArrivalToday() < 0) { // and not already logged
+            settings.setHomeArrivalToday(minuteOfDayNow());
         }
 
         // --- Bluetooth connected device ---
@@ -381,6 +406,14 @@ public class TrackingService extends Service {
                     settings.saveArrival(date, settings.getArrivalToday());
                 if (settings.getDepartureToday() >= 0)
                     settings.saveDeparture(date, settings.getDepartureToday());
+                if (settings.getHomeArrivalToday() >= 0)
+                    settings.saveHomeArrival(date, settings.getHomeArrivalToday());
+
+                // Optional: post arrival times to Exist as time-of-day (type 4).
+                postTimeOfDayIfEnabled(api, "home_arrival", "Got Home Time",
+                        "location", date, settings.getHomeArrivalToday());
+                postTimeOfDayIfEnabled(api, "work_arrival", "Got To Work Time",
+                        "location", date, settings.getArrivalToday());
 
                 settings.setLastStatus("Posted " + date + ": " + statusLine());
 
@@ -418,6 +451,18 @@ public class TrackingService extends Service {
         api.updateValue(attr, date, value);
     }
 
+    /** Post a time-of-day value (Exist value_type 4: minutes from midnight).
+     *  Only posts if enabled and the value is valid (>= 0). */
+    private void postTimeOfDayIfEnabled(ExistApi api, String metric, String label,
+                                        String group, String date, int minOfDay)
+            throws java.io.IOException {
+        if (!settings.postEnabled(metric)) return;
+        if (minOfDay < 0) return; // no event captured that day
+        String attr = settings.getAttrFor(metric, defaultAttrName(metric));
+        api.ensureAttribute(attr, label, group, 4); // 4 = time of day
+        api.updateValue(attr, date, minOfDay);
+    }
+
     private String defaultAttrName(String metric) {
         switch (metric) {
             case "screen": return "screen_time";
@@ -426,6 +471,8 @@ public class TrackingService extends Service {
             case "yt_home": return "youtube_at_home";
             case "soc_work": return "social_at_work";
             case "soc_home": return "social_at_home";
+            case "home_arrival": return "got_home_time";
+            case "work_arrival": return "got_to_work_time";
             default: return metric;
         }
     }
