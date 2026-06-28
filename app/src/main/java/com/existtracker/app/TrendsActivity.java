@@ -124,6 +124,9 @@ public class TrendsActivity extends AppCompatActivity {
         addMetric(root, "Time together awake — weekly avg/day", "together_awake",
                 Color.parseColor("#F2B441"));
 
+        // Church attendance — days per month (count of days with any church time).
+        addChurchPanel(root);
+
         // Stopwatch trends (one chart per stopwatch that has history).
         Stopwatches sw = new Stopwatches(this);
         for (Stopwatches.SW s : sw.getAll()) {
@@ -259,6 +262,51 @@ public class TrendsActivity extends AppCompatActivity {
             case 365: return "last year";
             default: return "all time";
         }
+    }
+
+    /** Church attendance: count of days per month with any church time logged.
+     *  (We don't show time-at-church anywhere; just how many days/month.) */
+    private void addChurchPanel(LinearLayout root) {
+        java.util.TreeMap<String, Integer> hist = settings.getHistory("church");
+        // Bucket by YYYY-MM, counting days with >0 minutes.
+        java.util.TreeMap<String, Integer> perMonth = new java.util.TreeMap<>();
+        for (java.util.Map.Entry<String, Integer> e : hist.entrySet()) {
+            if (e.getValue() == null || e.getValue() <= 0) continue;
+            String ym = e.getKey().length() >= 7 ? e.getKey().substring(0, 7) : e.getKey();
+            perMonth.put(ym, perMonth.getOrDefault(ym, 0) + 1);
+        }
+        if (perMonth.isEmpty()) return; // nothing yet → hide panel
+
+        LinearLayout card = Ui.card(this);
+        card.addView(Ui.eyebrow(this, "Church — days per month"));
+        // Show most recent months last; simple labeled rows.
+        for (java.util.Map.Entry<String, Integer> e : perMonth.entrySet()) {
+            LinearLayout line = new LinearLayout(this);
+            line.setOrientation(LinearLayout.HORIZONTAL);
+            line.setPadding(dp(4), dp(2), dp(4), dp(2));
+            TextView m = new TextView(this);
+            m.setText(monthLabel(e.getKey()));
+            m.setTextColor(Ui.MUTED); m.setTextSize(13);
+            m.setLayoutParams(new LinearLayout.LayoutParams(dp(90),
+                    LinearLayout.LayoutParams.WRAP_CONTENT));
+            TextView v = new TextView(this);
+            v.setText(e.getValue() + (e.getValue() == 1 ? " day" : " days"));
+            v.setTextColor(Ui.TEXT); v.setTextSize(13);
+            line.addView(m); line.addView(v);
+            card.addView(line);
+        }
+        root.addView(card);
+    }
+
+    /** "2026-06" -> "Jun 2026". */
+    private String monthLabel(String ym) {
+        String[] names = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
+        try {
+            String[] p = ym.split("-");
+            int mi = Integer.parseInt(p[1]) - 1;
+            if (mi >= 0 && mi < 12) return names[mi] + " " + p[0];
+        } catch (Exception ignored) {}
+        return ym;
     }
 
     private void addMetric(LinearLayout root, String title, String metric, int color) {

@@ -149,6 +149,12 @@ public class TrackingService extends Service {
                 currentBucket = "home";
                 onHomeNow = true;
             }
+            if (ssid.equalsIgnoreCase(settings.getChurchSsid())) {
+                settings.addChurch(minutes);
+                // First church connect today = arrival (for backend inferences).
+                if (settings.getChurchArrivalToday() < 0)
+                    settings.setChurchArrivalToday(minuteOfDayNow());
+            }
         }
 
         // --- "Got home from work" detection (SSID-only, no GPS) ---
@@ -373,6 +379,9 @@ public class TrackingService extends Service {
                 settings.saveHistory("youtube", date, youtubeTotal);
                 settings.saveHistory("social", date, settings.getSocialMin());
                 settings.saveHistory("driving", date, settings.getDrivingMin());
+                settings.saveHistory("church", date, settings.getChurchMin());
+                if (settings.getChurchArrivalToday() >= 0)
+                    settings.saveChurchArrival(date, settings.getChurchArrivalToday());
                 settings.saveHistory("screen", date, settings.getScreenMin());
                 settings.saveHistory("sleep", date, Math.max(0, settings.getSleepMin()));
                 settings.saveHistory("yt_work", date, settings.getYtWork());
@@ -415,6 +424,13 @@ public class TrackingService extends Service {
                 postTimeOfDayIfEnabled(api, "work_arrival", "Got To Work Time",
                         "location", date, settings.getArrivalToday());
 
+                // Optional: time at church (duration). Uses the Church Time attr
+                // from Step 3; only posts if the "post church" toggle is on.
+                if (settings.postEnabled("church")) {
+                    api.ensureAttribute(settings.getChurchAttr(), "Church Time", "location");
+                    api.updateValue(settings.getChurchAttr(), date, settings.getChurchMin());
+                }
+
                 settings.setLastStatus("Posted " + date + ": " + statusLine());
 
                 // Post each tracker's daily total to its Exist attribute,
@@ -437,6 +453,17 @@ public class TrackingService extends Service {
 
                 // Send key metrics to the backend so DAKboard can display them.
                 pushMetricsToBackend(date);
+
+                // Cloud backup (Supabase) — only if the user enabled auto-backup.
+                // Runs here on the same background thread as the nightly post.
+                if (settings.getCloudAuto()) {
+                    try {
+                        CloudSync cloud = new CloudSync(this);
+                        if (cloud.isConfigured()) cloud.backupNow();
+                    } catch (Exception ce) {
+                        settings.setCloudLastStatus("Auto-backup failed: " + ce.getMessage());
+                    }
+                }
             } catch (Exception e) {
                 settings.setLastStatus("Post failed: " + e.getMessage());
             }
@@ -473,6 +500,7 @@ public class TrackingService extends Service {
             case "soc_home": return "social_at_home";
             case "home_arrival": return "got_home_time";
             case "work_arrival": return "got_to_work_time";
+            case "church": return "time_at_church";
             default: return metric;
         }
     }

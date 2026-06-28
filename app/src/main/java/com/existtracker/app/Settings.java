@@ -42,6 +42,11 @@ public class Settings {
     public String getHomeAttr()     { return prefs.getString("home_attr", "home_time"); }
     public String getHomeSsid()     { return prefs.getString("home_ssid", "Gilligan"); }
 
+    public String getChurchSsid()   { return prefs.getString("church_ssid", "GablesUCC_Guest"); }
+    public void setChurchSsid(String v) { prefs.edit().putString("church_ssid", v).apply(); }
+    public String getChurchAttr()   { return prefs.getString("church_attr", "time_at_church"); }
+    public void setChurchAttr(String v) { prefs.edit().putString("church_attr", v).apply(); }
+
     public String getYoutubeAttr()  { return prefs.getString("youtube_attr", "youtube_time"); }
     public String getYoutubePkgs()  { return prefs.getString("youtube_pkgs", "com.google.android.youtube"); }
 
@@ -69,12 +74,25 @@ public class Settings {
     public int getYoutubeMin()  { return prefs.getInt("c_youtube", 0); }
     public int getSocialMin()   { return prefs.getInt("c_social", 0); }
     public int getDrivingMin()  { return prefs.getInt("c_driving", 0); }
+    public int getChurchMin()   { return prefs.getInt("c_church", 0); }
 
     public void addHospital(int m){ prefs.edit().putInt("c_hospital", getHospitalMin()+m).apply(); }
     public void addHome(int m)    { prefs.edit().putInt("c_home", getHomeMin()+m).apply(); }
     public void addYoutube(int m) { prefs.edit().putInt("c_youtube", getYoutubeMin()+m).apply(); }
     public void addSocial(int m)  { prefs.edit().putInt("c_social", getSocialMin()+m).apply(); }
     public void addDriving(int m) { prefs.edit().putInt("c_driving", getDrivingMin()+m).apply(); }
+    public void addChurch(int m)  { prefs.edit().putInt("c_church", getChurchMin()+m).apply(); }
+
+    // Church arrival = first time connected to church WiFi today (minute of day).
+    // Captured for backend inferences (late-to-church, choir) — not shown in app.
+    public int getChurchArrivalToday() { return prefs.getInt("church_arrival_today", -1); }
+    public void setChurchArrivalToday(int minOfDay) {
+        prefs.edit().putInt("church_arrival_today", minOfDay).apply();
+    }
+    public void saveChurchArrival(String date, int minOfDay) {
+        prefs.edit().putInt("churcharr_" + date, minOfDay).apply();
+    }
+    public java.util.TreeMap<String, Integer> getChurchArrivalHistory() { return scan("churcharr_"); }
 
     public void clearCounters() {
         prefs.edit().putInt("c_hospital", 0).putInt("c_home", 0)
@@ -86,9 +104,11 @@ public class Settings {
                 .putInt("c_screen", 0)
                 .putInt("work_distract", 0).putInt("work_youtube", 0)
                 .putInt("c_together", 0)
+                .putInt("c_church", 0)
                 .apply();
         clearArrivalDeparture();
         clearHomeArrival();
+        prefs.edit().putInt("church_arrival_today", -1).apply();
     }
 
     // ----- App-usage split by location (work / home / away), minutes -----
@@ -130,6 +150,18 @@ public class Settings {
     public void setThreshold(String metric, int minutes) {
         prefs.edit().putInt("thresh_" + metric, minutes).apply();
     }
+
+    // ----- Cloud backup (Supabase) config -----
+    public String getCloudUrl()    { return prefs.getString("cloud_url", ""); }
+    public String getCloudKey()    { return prefs.getString("cloud_key", ""); }
+    public String getCloudDevice() { return prefs.getString("cloud_device", "tj-pixel"); }
+    public boolean getCloudAuto()  { return prefs.getBoolean("cloud_auto", false); }
+    public String getCloudLastStatus() { return prefs.getString("cloud_last", "Never"); }
+    public void setCloudUrl(String v)    { prefs.edit().putString("cloud_url", v).apply(); }
+    public void setCloudKey(String v)    { prefs.edit().putString("cloud_key", v).apply(); }
+    public void setCloudDevice(String v) { prefs.edit().putString("cloud_device", v).apply(); }
+    public void setCloudAuto(boolean b)  { prefs.edit().putBoolean("cloud_auto", b).apply(); }
+    public void setCloudLastStatus(String v) { prefs.edit().putString("cloud_last", v).apply(); }
 
     // For app-usage: remember total foreground seconds seen so far today,
     // so we count only the delta each tick.

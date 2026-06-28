@@ -279,17 +279,69 @@ public class Stopwatches {
 
     /** Today's scale note for a tracker (empty string if none). Sliders only. */
     public String getScaleNoteToday(String id) {
-        String today = todayStr();
+        return getScaleNoteForDate(id, todayStr());
+    }
+
+    /** Scale note for a specific date (empty string if none). Used by cloud sync. */
+    public String getScaleNoteForDate(String id, String date) {
         try {
             JSONArray arr = new JSONArray(prefs.getString("log", "[]"));
             for (int i = arr.length() - 1; i >= 0; i--) {
                 JSONObject o = arr.getJSONObject(i);
-                if (id.equals(o.optString("id")) && today.equals(o.optString("date"))) {
+                if (id.equals(o.optString("id")) && date.equals(o.optString("date"))) {
                     return o.optString("note", "");
                 }
             }
         } catch (Exception ignored) {}
         return "";
+    }
+
+    /** The raw event log (all entries, all trackers). Used by cloud sync to
+     *  push per-tap counter events with their own notes/timestamps. */
+    public JSONArray getRawLog() {
+        try {
+            return new JSONArray(prefs.getString("log", "[]"));
+        } catch (Exception e) {
+            return new JSONArray();
+        }
+    }
+
+    /** Produce a markdown summary of all user-created trackers, ready to paste
+     *  into the couples-app schema doc. Lists each tracker's name, type, how it
+     *  maps to the cloud table (data_type / value_kind), and whether it carries
+     *  notes. Does NOT include any note content or values — just the catalog of
+     *  what is being tracked. */
+    public String exportTrackerListMarkdown() {
+        java.util.List<SW> all = getAll();
+        StringBuilder sb = new StringBuilder();
+        sb.append("## User-created trackers (as of export)\n\n");
+        sb.append("| Name | Type | data_type | value_kind | Notes? |\n");
+        sb.append("|---|---|---|---|---|\n");
+        if (all.isEmpty()) {
+            sb.append("| _(none created yet)_ | | | | |\n");
+        }
+        for (SW s : all) {
+            String type, dataType, kind, notes;
+            if (s.isScale()) {
+                type = "scale (1-9 slider)"; dataType = "scale";
+                kind = "scale_1_9"; notes = "yes";
+            } else if (s.isCounter()) {
+                type = "counter (tap +1)"; dataType = "counter_daily / counter_event";
+                kind = "count"; notes = "yes (per tap)";
+            } else {
+                type = "timer (stopwatch)"; dataType = "timer_daily";
+                kind = "minutes"; notes = "no";
+            }
+            sb.append("| ").append(s.name)
+              .append(" | ").append(type)
+              .append(" | ").append(dataType)
+              .append(" | ").append(kind)
+              .append(" | ").append(notes)
+              .append(" |\n");
+        }
+        sb.append("\n_Built-in metrics (work time, social, screen, together, ")
+          .append("arrivals, etc.) are always present in addition to these._\n");
+        return sb.toString();
     }
 
     // ---------- Run controls ----------

@@ -179,6 +179,14 @@ public class MainActivity extends AppCompatActivity {
                 "WiFi name", () -> settings.getHomeSsid(), s -> settings.setHomeSsid(s),
                 "location"));
 
+        // Church location — same full editor as Home/Hospital (title, Exist attr
+        // + chooser, and the WiFi SSID). Tracked in Trends (days/month) and
+        // optionally posted to Exist. Intentionally NOT shown on the dashboard.
+        root.addView(trackerEditor("Church Time",
+                () -> settings.getChurchAttr(), s -> settings.setChurchAttr(s),
+                "WiFi name", () -> settings.getChurchSsid(), s -> settings.setChurchSsid(s),
+                "location"));
+
         root.addView(trackerEditor("Youtube Time",
                 () -> settings.getYoutubeAttr(), s -> settings.setYoutubeAttr(s),
                 "App package(s)", () -> settings.getYoutubePkgs(), s -> settings.setYoutubePkgs(s),
@@ -252,6 +260,15 @@ public class MainActivity extends AppCompatActivity {
         root.addView(postToggle("Social at work", "soc_work", "social_at_work"));
         root.addView(postToggle("Social at home", "soc_home", "social_at_home"));
 
+        // Church posting uses the Church Time attribute from Step 3 (above), so
+        // this is just an on/off toggle — no separate attribute field.
+        CheckBox churchPost = new CheckBox(this);
+        churchPost.setText("Post time at church to Exist");
+        churchPost.setTextColor(Ui.TEXT);
+        churchPost.setChecked(settings.postEnabled("church"));
+        churchPost.setOnCheckedChangeListener((v, on) -> settings.setPostEnabled("church", on));
+        root.addView(churchPost);
+
         // Arrival times (time-of-day, value_type 4). Detected via WiFi SSID only.
         root.addView(note("Arrival times below post as a time-of-day value. "
                 + "When creating a new attribute, pick \"Time of day\"."));
@@ -270,6 +287,99 @@ public class MainActivity extends AppCompatActivity {
         root.addView(thresholdRow("Screen time — warn over", "screen"));
         root.addView(thresholdRow("Work distractions — warn over", "work_distract"));
         root.addView(thresholdRow("Time together — goal (at least)", "together"));
+
+        // --- Cloud backup (Supabase) ---
+        root.addView(section("Cloud backup"));
+        root.addView(note("Auto-save all tracker data (including notes) to your "
+                + "Supabase project so nothing is lost and future tools can read "
+                + "it. Paste your Project URL and service key (see the setup "
+                + "guide). Stored only on this phone."));
+        EditText cloudUrl = new EditText(this);
+        darkEt(cloudUrl);
+        cloudUrl.setHint("https://yourproject.supabase.co");
+        cloudUrl.setText(settings.getCloudUrl());
+        fieldSavers.add(() -> settings.setCloudUrl(cloudUrl.getText().toString().trim()));
+        root.addView(labeled("Project URL", cloudUrl));
+
+        EditText cloudKey = new EditText(this);
+        darkEt(cloudKey);
+        cloudKey.setHint("service_role key");
+        cloudKey.setText(settings.getCloudKey());
+        fieldSavers.add(() -> settings.setCloudKey(cloudKey.getText().toString().trim()));
+        root.addView(labeled("Service key", cloudKey));
+
+        EditText cloudDevice = new EditText(this);
+        darkEt(cloudDevice);
+        cloudDevice.setHint("tj-pixel");
+        cloudDevice.setText(settings.getCloudDevice());
+        fieldSavers.add(() -> {
+            String d = cloudDevice.getText().toString().trim();
+            settings.setCloudDevice(d.isEmpty() ? "tj-pixel" : d);
+        });
+        root.addView(labeled("Device name", cloudDevice));
+
+        CheckBox cloudAuto = new CheckBox(this);
+        cloudAuto.setText("Auto-backup nightly (with the Exist post)");
+        cloudAuto.setTextColor(Ui.TEXT);
+        cloudAuto.setChecked(settings.getCloudAuto());
+        cloudAuto.setOnCheckedChangeListener((v, on) -> settings.setCloudAuto(on));
+        root.addView(cloudAuto);
+
+        TextView cloudStatus = new TextView(this);
+        cloudStatus.setText("Last backup: " + settings.getCloudLastStatus());
+        cloudStatus.setTextColor(Ui.MUTED);
+        cloudStatus.setTextSize(12);
+        cloudStatus.setPadding(0, dp(4), 0, dp(4));
+        root.addView(cloudStatus);
+
+        Button backupBtn = new Button(this);
+        backupBtn.setText("Save settings & back up now");
+        backupBtn.setOnClickListener(v -> {
+            saveFields(); // persist URL/key/device first
+            cloudStatus.setText("Last backup: backing up…");
+            new Thread(() -> {
+                String result;
+                try {
+                    result = new CloudSync(this).backupNow();
+                } catch (Exception e) {
+                    result = "Failed: " + e.getMessage();
+                }
+                final String r = result;
+                runOnUiThread(() -> {
+                    cloudStatus.setText("Last backup: " + r);
+                    toast(r);
+                });
+            }).start();
+        });
+        root.addView(backupBtn);
+
+        Button listBtn = new Button(this);
+        listBtn.setText("List my trackers (for schema doc)");
+        listBtn.setOnClickListener(v -> {
+            String md = new Stopwatches(this).exportTrackerListMarkdown();
+            EditText out = new EditText(this);
+            darkEt(out);
+            out.setText(md);
+            out.setKeyListener(null); // read-only but selectable/copyable
+            out.setTextSize(12);
+            LinearLayout box = new LinearLayout(this);
+            box.setOrientation(LinearLayout.VERTICAL);
+            int dpad = dp(16);
+            box.setPadding(dpad, dpad, dpad, dpad);
+            box.addView(out);
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("Your trackers")
+                    .setView(box)
+                    .setPositiveButton("Copy", (d, w) -> {
+                        android.content.ClipboardManager cm =
+                                (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("trackers", md));
+                        toast("Copied — paste into your couples-app doc or to Claude");
+                    })
+                    .setNegativeButton("Close", null)
+                    .show();
+        });
+        root.addView(listBtn);
 
         // --- Step 6: backup / restore ---
         root.addView(section("Step 6 — Backup & restore"));
@@ -685,6 +795,20 @@ public class MainActivity extends AppCompatActivity {
                 }));
         box.addView(choose);
 
+        return box;
+    }
+
+    /** A label above an input field, returned as one vertical block. */
+    private View labeled(String label, EditText field) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(0, dp(6), 0, dp(2));
+        TextView t = new TextView(this);
+        t.setText(label);
+        t.setTextSize(13);
+        t.setTextColor(Ui.TEXT);
+        box.addView(t);
+        box.addView(field);
         return box;
     }
 
