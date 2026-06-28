@@ -118,14 +118,20 @@ public class TrendsActivity extends AppCompatActivity {
         for (Stopwatches.SW s : sw.getAll()) {
             java.util.TreeMap<String, Integer> hist = sw.getHistory(s.id);
             if (hist.isEmpty()) continue;
-            java.util.List<Trends.Week> weeks = Trends.weeklyWorkdayAverages(hist);
+            // Counters: weekly totals (times per week). Timers: weekly avg/day.
+            // Scales shown on dashboard, skip here.
+            boolean counter = s.isCounter();
+            if (s.isScale()) continue;
+            java.util.List<Trends.Week> weeks = counter
+                    ? Trends.weeklyTotals(hist) : Trends.weeklyWorkdayAverages(hist);
             java.util.List<String> labels = new java.util.ArrayList<>();
             java.util.List<Double> values = new java.util.ArrayList<>();
             for (Trends.Week w : weeks) { labels.add(w.mondayDate); values.add(w.avgMinutes); }
             int color = Color.parseColor("#5BD1A0");
             try { color = Color.parseColor(s.color); } catch (Exception ignored) {}
             LineChartView chart = new LineChartView(this);
-            chart.setData(s.name + " — weekly avg/day", color, labels, values);
+            chart.setData(s.name + (counter ? " — per week" : " — weekly avg/day"),
+                    color, labels, values);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, dp(220));
             lp.setMargins(0, dp(10), 0, dp(2));

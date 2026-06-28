@@ -55,6 +55,30 @@ public class Trends {
         return weeks; // already chronological because TreeMap sorts keys
     }
 
+    /** Weekly totals: sum of ALL days (incl. weekends) per week. Good for
+     *  counters where you want "times per week" rather than a daily average.
+     *  The sum is placed in avgMinutes so existing chart code can reuse it. */
+    public static List<Week> weeklyTotals(TreeMap<String, Integer> history) {
+        TreeMap<String, List<Integer>> buckets = new TreeMap<>();
+        for (Map.Entry<String, Integer> e : history.entrySet()) {
+            Calendar c = parse(e.getKey());
+            if (c == null) continue;
+            String monday = mondayOf(c);
+            buckets.computeIfAbsent(monday, k -> new ArrayList<>()).add(e.getValue());
+        }
+        List<Week> weeks = new ArrayList<>();
+        for (Map.Entry<String, List<Integer>> b : buckets.entrySet()) {
+            Week w = new Week();
+            w.mondayDate = b.getKey();
+            int sum = 0;
+            for (int v : b.getValue()) sum += v;
+            w.daysCounted = b.getValue().size();
+            w.avgMinutes = sum; // total for the week
+            weeks.add(w);
+        }
+        return weeks;
+    }
+
     /** A short human sentence describing the trend direction. */
     public static String describeTrend(List<Week> weeks, String label) {
         if (weeks.size() < 2) {

@@ -153,6 +153,11 @@ public class DashboardActivity extends AppCompatActivity {
         dow.addView(bars);
         root.addView(dow);
 
+        // --- New dashboard panels (order: week totals, scales, time-since) ---
+        addThisWeekPanel(root);
+        addScalePanel(root);
+        addTimeSincePanel(root);
+
         // --- Navigation buttons ---
         root.addView(navButton("📈  All trends & charts", () ->
                 startActivity(new Intent(this, TrendsActivity.class))));
@@ -194,6 +199,162 @@ public class DashboardActivity extends AppCompatActivity {
         TextView t = Ui.label(this, Trends.describeTrend(weeks, "Departure time"));
         t.setPadding(Ui.dp(this,4), Ui.dp(this,8), Ui.dp(this,4), 0);
         return t;
+    }
+
+    /** Sum of a metric's daily-history values for the current week (Mon-based),
+     *  plus an optional live today value not yet in history. */
+    private int weekSum(Settings s, String metric, int todayLive) {
+        java.util.TreeMap<String, Integer> hist = s.getHistory(metric);
+        java.util.Calendar cal = java.util.Calendar.getInstance();
+        // Find this week's Monday.
+        int dow = cal.get(java.util.Calendar.DAY_OF_WEEK); // Sun=1..Sat=7
+        int back = (dow == java.util.Calendar.SUNDAY) ? 6 : dow - java.util.Calendar.MONDAY;
+        java.util.Calendar monday = (java.util.Calendar) cal.clone();
+        monday.add(java.util.Calendar.DAY_OF_MONTH, -back);
+        String today = String.format(java.util.Locale.US, "%04d-%02d-%02d",
+                cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1,
+                cal.get(java.util.Calendar.DAY_OF_MONTH));
+        int sum = 0;
+        for (java.util.Map.Entry<String, Integer> e : hist.entrySet()) {
+            String d = e.getKey();
+            // include dates >= monday and < today (today comes from live value)
+            if (d.compareTo(mondayStr(monday)) >= 0 && d.compareTo(today) < 0) {
+                sum += e.getValue();
+            }
+        }
+        return sum + todayLive;
+    }
+
+    private String mondayStr(java.util.Calendar monday) {
+        return String.format(java.util.Locale.US, "%04d-%02d-%02d",
+                monday.get(java.util.Calendar.YEAR), monday.get(java.util.Calendar.MONTH) + 1,
+                monday.get(java.util.Calendar.DAY_OF_MONTH));
+    }
+
+    /** "This Week So Far" — weekly totals for key time metrics + each timer. */
+    private void addThisWeekPanel(LinearLayout parent) {
+        Settings s = settings;
+        LinearLayout card = Ui.card(this);
+        card.addView(Ui.eyebrow(this, "This week so far"));
+        card.addView(weekRow("Time at work", weekSum(s, "hospital", s.getHospitalMin())));
+        card.addView(weekRow("Social media", weekSum(s, "social", s.getSocialMin())));
+        card.addView(weekRow("Work distractions", weekSum(s, "work_distract", s.getWorkDistractMin())));
+        // Each timer (duration trackers) — sum this week from its history.
+        Stopwatches store = new Stopwatches(this);
+        for (Stopwatches.SW sw : store.getAll()) {
+            if (sw.isScale() || sw.isCounter()) continue; // timers only here
+            int wk = swWeekSum(store, sw.id);
+            if (wk > 0) card.addView(weekRow(sw.name, wk));
+        }
+        parent.addView(card);
+    }
+
+    private int swWeekSum(Stopwatches store, String id) {
+        java.util.TreeMap<String, Integer> hist = store.getHistory(id);
+        java.util.Calendar cal = java.util.Calendar.getInstance();
+        int dow = cal.get(java.util.Calendar.DAY_OF_WEEK);
+        int back = (dow == java.util.Calendar.SUNDAY) ? 6 : dow - java.util.Calendar.MONDAY;
+        java.util.Calendar monday = (java.util.Calendar) cal.clone();
+        monday.add(java.util.Calendar.DAY_OF_MONTH, -back);
+        int sum = 0;
+        for (java.util.Map.Entry<String, Integer> e : hist.entrySet()) {
+            if (e.getKey().compareTo(mondayStr(monday)) >= 0) sum += e.getValue();
+        }
+        return sum;
+    }
+
+    private View weekRow(String label, int minutes) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setPadding(0, Ui.dp(this, 6), 0, Ui.dp(this, 6));
+        TextView l = new TextView(this);
+        l.setText(label);
+        l.setTextColor(Ui.TEXT);
+        l.setTextSize(14);
+        l.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        row.addView(l);
+        TextView v = new TextView(this);
+        v.setText(hm(minutes));
+        v.setTextColor(Ui.ACCENT);
+        v.setTextSize(14);
+        row.addView(v);
+        return row;
+    }
+
+    /** "Scales" — mini line graph of scale trackers over last 14 days. */
+    private void addScalePanel(LinearLayout parent) {
+        Stopwatches store = new Stopwatches(this);
+        java.util.List<Stopwatches.SW> scales = new java.util.ArrayList<>();
+        for (Stopwatches.SW sw : store.getAll()) if (sw.isScale()) scales.add(sw);
+        if (scales.isEmpty()) return;
+
+        LinearLayout card = Ui.card(this);
+        card.addView(Ui.eyebrow(this, "Scales (last 14 days)"));
+        for (Stopwatches.SW sw : scales) {
+            TextView nm = new TextView(this);
+            int today = store.getDailyTotal(sw.id, Stopwatches.todayStr());
+            nm.setText(sw.name + (today >= 1 ? "  —  today " + today + "/9" : "  —  not set today"));
+            nm.setTextColor(Ui.TEXT);
+            nm.setTextSize(14);
+            nm.setPadding(0, Ui.dp(this, 8), 0, Ui.dp(this, 2));
+            card.addView(nm);
+            // Simple sparkline of last 14 days.
+            java.util.TreeMap<String, Integer> hist = store.getHistory(sw.id);
+            java.util.List<Double> vals = new java.util.ArrayList<>();
+            java.util.Calendar cal = java.util.Calendar.getInstance();
+            for (int i = 13; i >= 0; i--) {
+                java.util.Calendar c = (java.util.Calendar) cal.clone();
+                c.add(java.util.Calendar.DAY_OF_MONTH, -i);
+                String d = String.format(java.util.Locale.US, "%04d-%02d-%02d",
+                        c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH) + 1,
+                        c.get(java.util.Calendar.DAY_OF_MONTH));
+                Integer val = hist.get(d);
+                vals.add(val == null ? 0.0 : (double) val);
+            }
+            LineChartView chart = new LineChartView(this);
+            int color = Ui.ACCENT;
+            try { color = Color.parseColor(sw.color); } catch (Exception ignored) {}
+            java.util.List<String> labels = new java.util.ArrayList<>();
+            for (int i = 0; i < vals.size(); i++) labels.add("");
+            chart.setData(sw.name, color, labels, vals);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 120));
+            chart.setLayoutParams(lp);
+            card.addView(chart);
+        }
+        parent.addView(card);
+    }
+
+    /** "Time Since" — for each counter, days since last logged + count this month. */
+    private void addTimeSincePanel(LinearLayout parent) {
+        Stopwatches store = new Stopwatches(this);
+        java.util.List<Stopwatches.SW> counters = new java.util.ArrayList<>();
+        for (Stopwatches.SW sw : store.getAll()) if (sw.isCounter()) counters.add(sw);
+        if (counters.isEmpty()) return;
+
+        LinearLayout card = Ui.card(this);
+        card.addView(Ui.eyebrow(this, "Time since"));
+        for (Stopwatches.SW sw : counters) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setPadding(0, Ui.dp(this, 6), 0, Ui.dp(this, 6));
+            TextView l = new TextView(this);
+            l.setText(sw.name);
+            l.setTextColor(Ui.TEXT);
+            l.setTextSize(14);
+            l.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            row.addView(l);
+            TextView v = new TextView(this);
+            int days = store.daysSinceLastLog(sw.id);
+            int month = store.countInLastDays(sw.id, 30);
+            String daysTxt = days < 0 ? "never" : (days == 0 ? "today" : days + "d ago");
+            v.setText(daysTxt + "  ·  " + month + "/30d");
+            v.setTextColor(Ui.MUTED);
+            v.setTextSize(13);
+            row.addView(v);
+            card.addView(row);
+        }
+        parent.addView(card);
     }
 
     /** Show pinned counters/timers as tappable items, acting directly on tap. */

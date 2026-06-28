@@ -10,10 +10,12 @@ import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.ArrayAdapter;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -110,6 +112,11 @@ public class StopwatchActivity extends AppCompatActivity {
         addCounter.setOnClickListener(v -> editDialog(null, "counter"));
         addCounter.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         addRow.addView(addCounter);
+        Button addScale = new Button(this);
+        addScale.setText("＋ Scale");
+        addScale.setOnClickListener(v -> editDialog(null, "scale"));
+        addScale.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        addRow.addView(addScale);
         root.addView(addRow);
 
         root.addView(spacer(Ui.dp(this, 8)));
@@ -143,6 +150,7 @@ public class StopwatchActivity extends AppCompatActivity {
         circle.setGravity(Gravity.CENTER);
         circle.setTextColor(Color.WHITE);
         if (s.isCounter()) { circle.setText("+1"); circle.setTextSize(20); }
+        else if (s.isScale()) { circle.setText("⚖"); circle.setTextSize(22); }
         else { circle.setText(s.isRunning() ? "■" : "▶"); circle.setTextSize(22); }
         LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(size, size);
         clp.setMargins(0, 0, Ui.dp(this, 14), 0);
@@ -160,7 +168,12 @@ public class StopwatchActivity extends AppCompatActivity {
 
         TextView live = new TextView(this);
         int todayTotal = store.getDailyTotal(s.id, Stopwatches.todayStr());
-        if (s.isCounter()) {
+        if (s.isScale()) {
+            live.setText(todayTotal >= 1 ? "Today: " + todayTotal + " / 9"
+                    : "Not set today");
+            live.setTextColor(todayTotal >= 1 ? Ui.ACCENT : Ui.MUTED);
+            live.setTextSize(15);
+        } else if (s.isCounter()) {
             live.setText("Today: " + todayTotal + (s.pushToExist ? "" : "  · internal"));
             live.setTextColor(Ui.MUTED);
             live.setTextSize(15);
@@ -187,7 +200,10 @@ public class StopwatchActivity extends AppCompatActivity {
         card.addView(row);
 
         circle.setOnClickListener(v -> {
-            if (s.isCounter()) {
+            if (s.isScale()) {
+                // scale uses the slider below, not the circle
+                toast("Use the slider to set " + s.name);
+            } else if (s.isCounter()) {
                 store.increment(s.id);
                 toast("+1 " + s.name);
                 rebuild();
@@ -228,6 +244,37 @@ public class StopwatchActivity extends AppCompatActivity {
             controls.setPadding(0, Ui.dp(this, 8), 0, 0);
             controls.addView(ctrlButton("−1 (undo)", () -> { store.decrement(s.id); rebuild(); }));
             card.addView(controls);
+        } else if (s.isScale()) {
+            // Slider from 1 to 9. SeekBar is 0-8 internally; display +1.
+            LinearLayout sCol = new LinearLayout(this);
+            sCol.setOrientation(LinearLayout.VERTICAL);
+            sCol.setPadding(0, Ui.dp(this, 10), 0, 0);
+            final TextView valLabel = new TextView(this);
+            int cur = todayTotal >= 1 ? todayTotal : 5; // default mid if unset
+            valLabel.setText("Set value: " + cur + " / 9");
+            valLabel.setTextColor(Ui.TEXT);
+            valLabel.setTextSize(14);
+            sCol.addView(valLabel);
+            android.widget.SeekBar bar = new android.widget.SeekBar(this);
+            bar.setMax(8);
+            bar.setProgress(cur - 1);
+            bar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+                public void onProgressChanged(android.widget.SeekBar sb, int p, boolean fromUser) {
+                    valLabel.setText("Set value: " + (p + 1) + " / 9");
+                }
+                public void onStartTrackingTouch(android.widget.SeekBar sb) {}
+                public void onStopTrackingTouch(android.widget.SeekBar sb) {}
+            });
+            sCol.addView(bar);
+            LinearLayout sRow = new LinearLayout(this);
+            sRow.setOrientation(LinearLayout.HORIZONTAL);
+            sRow.addView(ctrlButton("Save value", () -> {
+                store.setScaleValue(s.id, bar.getProgress() + 1);
+                toast("Saved " + (bar.getProgress() + 1) + " for " + s.name);
+                rebuild();
+            }));
+            sCol.addView(sRow);
+            card.addView(sCol);
         }
 
         name.setOnLongClickListener(v -> { editDialog(s, s.type); return true; });
@@ -294,7 +341,8 @@ public class StopwatchActivity extends AppCompatActivity {
         int p = Ui.dp(this, 16); box.setPadding(p, p, p, p);
 
         TextView typeLabel = new TextView(this);
-        typeLabel.setText("counter".equals(type) ? "Counter (tap = +1)" : "Timer (stopwatch)");
+        typeLabel.setText("counter".equals(type) ? "Counter (tap = +1)"
+                : ("scale".equals(type) ? "Scale (1–9 slider)" : "Timer (stopwatch)"));
         typeLabel.setTextColor(Color.parseColor("#1565C0"));
         box.addView(typeLabel);
 
@@ -326,6 +374,25 @@ public class StopwatchActivity extends AppCompatActivity {
         pinCb.setText("Pin to home screen");
         pinCb.setChecked(existing != null && existing.pinned);
         box.addView(pinCb);
+
+        // Exist value type: how the number is stored/displayed in Exist.
+        // Timers default to Duration (minutes); counters default to Count.
+        TextView vtLabel = new TextView(this);
+        vtLabel.setText("How Exist should treat the value:");
+        vtLabel.setTextSize(13);
+        vtLabel.setPadding(0, Ui.dp(this, 10), 0, 0);
+        box.addView(vtLabel);
+        final String[] vtLabels = {"Time / duration (shows as 8h 5m)", "Count / number", "Scale (1–9)"};
+        final int[] vtValues = {3, 0, 8};
+        Spinner vtSpinner = new Spinner(this);
+        vtSpinner.setAdapter(new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_dropdown_item, vtLabels));
+        // Default: existing value if editing; else by type.
+        int defaultVt = existing != null ? existing.valueType
+                : ("counter".equals(type) ? 0 : ("scale".equals(type) ? 8 : 3));
+        int vtSel = defaultVt == 0 ? 1 : (defaultVt == 8 ? 2 : 0);
+        vtSpinner.setSelection(vtSel);
+        box.addView(vtSpinner);
 
         final String[] colors = {"#1565C0", "#5BD1A0", "#F2B441", "#C62828", "#6A1B9A", "#00838F"};
         final String[] chosen = { existing != null ? existing.color : colors[0] };
@@ -362,8 +429,9 @@ public class StopwatchActivity extends AppCompatActivity {
                     if (wantPush && at.isEmpty()) {
                         toast("Saved as internal-only (no Exist attribute set).");
                     }
-                    if (existing == null) store.addTracker(nm, at, chosen[0], type, doPush, pin);
-                    else store.updateTracker(existing.id, nm, at, chosen[0], doPush, pin);
+                    int vt = vtValues[vtSpinner.getSelectedItemPosition()];
+                    if (existing == null) store.addTracker(nm, at, chosen[0], type, doPush, pin, vt);
+                    else store.updateTracker(existing.id, nm, at, chosen[0], doPush, pin, vt);
                     rebuild();
                 })
                 .setNegativeButton("Cancel", null);

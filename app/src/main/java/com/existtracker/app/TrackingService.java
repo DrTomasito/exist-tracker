@@ -391,7 +391,12 @@ public class TrackingService extends Service {
                     for (Stopwatches.SW s : sw.getAll()) {
                         if (s.pushToExist && s.attr != null && !s.attr.isEmpty()) {
                             int val = sw.getDailyTotal(s.id, date);
-                            api.ensureAttribute(s.attr, s.name, "productivity");
+                            int vtype = s.valueType; // 3=duration, 0=integer, 8=scale
+                            // Scale values must be 1-9; skip posting if unset today
+                            // (a 0 would be rejected by Exist as out of range).
+                            if (s.isScale() && (val < 1 || val > 9)) continue;
+                            api.ensureAttribute(s.attr, s.name,
+                                    s.isScale() ? "mood" : "productivity", vtype);
                             api.updateValue(s.attr, date, val);
                         }
                     }

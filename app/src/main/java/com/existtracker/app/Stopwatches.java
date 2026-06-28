@@ -45,10 +45,12 @@ public class Stopwatches {
         public boolean pushToExist = true;  // also post the daily total to Exist?
         public boolean pinned = false;      // show on the homepage?
         public int order = 0;               // sort order in the tab/home
+        public int valueType = 3;           // Exist value type: 3=duration(min), 0=integer
         public long runSince;   // timer only: 0 = stopped
         public long banked;     // timer only: seconds banked while paused
         public boolean isRunning() { return runSince > 0; }
         public boolean isCounter() { return "counter".equals(type); }
+        public boolean isScale() { return "scale".equals(type); }
         /** Current live session seconds (banked + time since last resume). */
         public long currentSessionSeconds() {
             long live = runSince > 0 ? (System.currentTimeMillis() - runSince) / 1000 : 0;
@@ -71,6 +73,8 @@ public class Stopwatches {
                 s.pushToExist = o.optBoolean("pushToExist", true);
                 s.pinned = o.optBoolean("pinned", false);
                 s.order = o.optInt("order", i);
+                s.valueType = o.optInt("valueType",
+                        "counter".equals(s.type) ? 0 : ("scale".equals(s.type) ? 8 : 3));
                 s.runSince = o.optLong("runSince", 0);
                 s.banked = o.optLong("banked", 0);
                 out.add(s);
@@ -94,6 +98,7 @@ public class Stopwatches {
                 o.put("pushToExist", s.pushToExist);
                 o.put("pinned", s.pinned);
                 o.put("order", s.order);
+                o.put("valueType", s.valueType);
                 o.put("runSince", s.runSince);
                 o.put("banked", s.banked);
                 arr.put(o);
@@ -113,6 +118,12 @@ public class Stopwatches {
 
     public void addTracker(String name, String attr, String color, String type,
                            boolean pushToExist, boolean pinned) {
+        addTracker(name, attr, color, type, pushToExist, pinned,
+                "counter".equals(type) ? 0 : ("scale".equals(type) ? 8 : 3));
+    }
+
+    public void addTracker(String name, String attr, String color, String type,
+                           boolean pushToExist, boolean pinned, int valueType) {
         List<SW> list = getAll();
         SW s = new SW();
         s.id = "sw_" + System.currentTimeMillis();
@@ -122,6 +133,7 @@ public class Stopwatches {
         s.type = type;
         s.pushToExist = pushToExist;
         s.pinned = pinned;
+        s.valueType = valueType;
         s.order = list.size();
         s.runSince = 0;
         s.banked = 0;
@@ -141,6 +153,16 @@ public class Stopwatches {
         for (SW s : list) if (s.id.equals(id)) {
             s.name = name; s.attr = attr; s.color = color;
             s.pushToExist = pushToExist; s.pinned = pinned;
+        }
+        saveAll(list);
+    }
+
+    public void updateTracker(String id, String name, String attr, String color,
+                              boolean pushToExist, boolean pinned, int valueType) {
+        List<SW> list = getAll();
+        for (SW s : list) if (s.id.equals(id)) {
+            s.name = name; s.attr = attr; s.color = color;
+            s.pushToExist = pushToExist; s.pinned = pinned; s.valueType = valueType;
         }
         saveAll(list);
     }
@@ -187,6 +209,18 @@ public class Stopwatches {
         int cur = getDailyTotal(id, todayStr());
         if (cur <= 0) return;
         prefs.edit().putInt("total_" + id + "_" + todayStr(), cur - 1).apply();
+    }
+
+    /** Set today's scale value (1-9) for a scale tracker, replacing any prior
+     * value for today. Stored directly, not accumulated. */
+    public void setScaleValue(String id, int value) {
+        SW s = get(id);
+        if (s == null) return;
+        if (value < 1) value = 1;
+        if (value > 9) value = 9;
+        prefs.edit().putInt("total_" + id + "_" + todayStr(), value).apply();
+        // Replace today's log entry rather than stacking duplicates.
+        replaceTodayLog(id, s.name, todayStr(), value);
     }
 
     // ---------- Run controls ----------
@@ -323,6 +357,69 @@ public class Stopwatches {
             }
             prefs.edit().putString("log", keep.toString()).apply();
         } catch (Exception ignored) {}
+    }
+
+    /** Replace today's log entry for a tracker (used by scale: one value/day). */
+    private void replaceTodayLog(String id, String name, String date, int value) {
+        try {
+            JSONArray arr = new JSONArray(prefs.getString("log", "[]"));
+            JSONArray keep = new JSONArray();
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                if (id.equals(o.optString("id")) && date.equals(o.optString("date"))) continue;
+                keep.put(o);
+            }
+            JSONObject o = new JSONObject();
+            o.put("id", id); o.put("name", name); o.put("date", date);
+            o.put("minutes", value); o.put("ts", System.currentTimeMillis());
+            keep.put(o);
+            while (keep.length() > 500) keep.remove(0);
+            prefs.edit().putString("log", keep.toString()).apply();
+        } catch (Exception ignored) {}
+    }
+
+    /** Days since this tracker was last logged, or -1 if never. */
+    public int daysSinceLastLog(String id) {
+        String last = lastLogDate(id);
+        if (last == null) return -1;
+        try {
+            java.text.SimpleDateFormat f = new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US);
+            long then = f.parse(last).getTime();
+            long now = f.parse(todayStr()).getTime();
+            return (int) Math.round((now - then) / (1000.0 * 60 * 60 * 24));
+        } catch (Exception e) { return -1; }
+    }
+
+    /** The most recent date string this tracker was logged, or null. */
+    public String lastLogDate(String id) {
+        String best = null;
+        try {
+            JSONArray arr = new JSONArray(prefs.getString("log", "[]"));
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                if (id.equals(o.optString("id"))) {
+                    String d = o.optString("date");
+                    if (best == null || d.compareTo(best) > 0) best = d;
+                }
+            }
+        } catch (Exception ignored) {}
+        return best;
+    }
+
+    /** Number of times this counter was logged in the last n days (inclusive). */
+    public int countInLastDays(String id, int n) {
+        int total = 0;
+        java.util.TreeMap<String, Integer> hist = getHistory(id);
+        java.util.Calendar cal = java.util.Calendar.getInstance();
+        for (int i = 0; i < n; i++) {
+            String d = String.format(Locale.US, "%04d-%02d-%02d",
+                    cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1,
+                    cal.get(java.util.Calendar.DAY_OF_MONTH));
+            Integer v = hist.get(d);
+            if (v != null) total += v;
+            cal.add(java.util.Calendar.DAY_OF_MONTH, -1);
+        }
+        return total;
     }
 
     public static String todayStr() {
