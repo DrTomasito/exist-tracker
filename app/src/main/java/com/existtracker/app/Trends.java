@@ -103,6 +103,64 @@ public class Trends {
                 + String.format(Locale.US, "%.1f", recentAvg / 60.0) + " hrs).";
     }
 
+    /** A prepared series for the master graph: aligned x-labels + y-values. */
+    public static class RangeSeries {
+        public List<String> labels = new ArrayList<>(); // date or week-start keys
+        public List<Double> values = new ArrayList<>();  // minutes; null = no data
+    }
+
+    /**
+     * Build an aligned series for one metric over the last {@code days} days.
+     * Short ranges (<= 45 days) are plotted per-day; longer ranges are bucketed
+     * into weekly averages so the line stays readable. The returned labels are
+     * the shared x-axis; pass the SAME {@code days} for every metric so all the
+     * series on one graph line up.
+     */
+    public static RangeSeries seriesOverRange(TreeMap<String, Integer> history, int days) {
+        RangeSeries rs = new RangeSeries();
+        Calendar end = Calendar.getInstance();
+        Calendar start = (Calendar) end.clone();
+        start.add(Calendar.DAY_OF_MONTH, -(days - 1));
+
+        if (days <= 45) {
+            // Daily points across the window.
+            Calendar c = (Calendar) start.clone();
+            for (int i = 0; i < days; i++) {
+                String key = FMT.format(c.getTime());
+                rs.labels.add(key);
+                Integer v = history.get(key);
+                rs.values.add(v == null ? null : (double) v);
+                c.add(Calendar.DAY_OF_MONTH, 1);
+            }
+        } else {
+            // Weekly averages (Mon-anchored) across the window.
+            TreeMap<String, List<Integer>> buckets = new TreeMap<>();
+            for (Map.Entry<String, Integer> e : history.entrySet()) {
+                Calendar c = parse(e.getKey());
+                if (c == null) continue;
+                if (c.before(start) || c.after(end)) continue;
+                buckets.computeIfAbsent(mondayOf(c), k -> new ArrayList<>()).add(e.getValue());
+            }
+            // Walk every week in the window so gaps render as gaps.
+            Calendar wc = parseToCal(mondayOf(start));
+            Calendar wend = parseToCal(mondayOf(end));
+            while (wc != null && !wc.after(wend)) {
+                String wkKey = FMT.format(wc.getTime());
+                rs.labels.add(wkKey);
+                List<Integer> vals = buckets.get(wkKey);
+                if (vals == null || vals.isEmpty()) rs.values.add(null);
+                else {
+                    int sum = 0; for (int v : vals) sum += v;
+                    rs.values.add((double) sum / vals.size());
+                }
+                wc.add(Calendar.DAY_OF_MONTH, 7);
+            }
+        }
+        return rs;
+    }
+
+    private static Calendar parseToCal(String date) { return parse(date); }
+
     private static Calendar parse(String date) {        try {
             Calendar c = Calendar.getInstance();
             c.setTime(FMT.parse(date));

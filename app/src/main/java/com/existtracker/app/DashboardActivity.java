@@ -73,9 +73,6 @@ public class DashboardActivity extends AppCompatActivity {
         workCard.addView(hint);
         root.addView(workCard);
 
-        // --- Got home from work (yesterday + this week) ---
-        root.addView(buildHomeByCard());
-
         // --- Pinned counters/timers (configurable in the Counters tab) ---
         addPinnedTrackers(root);
 
@@ -83,19 +80,27 @@ public class DashboardActivity extends AppCompatActivity {
         LinearLayout glance = Ui.card(this);
         glance.addView(Ui.eyebrow(this, "Today so far"));
         LinearLayout r1 = Ui.statRow(this);
-        r1.addView(Ui.statCell(this, hm(settings.getHospitalMin()), "At work", Ui.TEXT));
+        r1.addView(Ui.statCell(this, hm(settings.getHospitalMin()), "At work",
+                overColor("hospital", settings.getHospitalMin(), Ui.TEXT)));
         r1.addView(Ui.statCell(this, hm(settings.getHomeMin()), "At home", Ui.TEXT));
         glance.addView(r1);
         LinearLayout r2 = Ui.statRow(this);
         int ytTotal = settings.getYoutubeMin() + settings.getWorkYoutubeMin();
-        r2.addView(Ui.statCell(this, hm(ytTotal), "YouTube (all)", Ui.WARN));
-        r2.addView(Ui.statCell(this, hm(settings.getSocialMin()), "Insta+FB", Ui.WARN));
+        r2.addView(Ui.statCell(this, hm(ytTotal), "YouTube (all)",
+                overColor("youtube", ytTotal, Ui.WARN)));
+        r2.addView(Ui.statCell(this, hm(settings.getSocialMin()), "Insta+FB",
+                overColor("social", settings.getSocialMin(), Ui.WARN)));
         glance.addView(r2);
         LinearLayout r3 = Ui.statRow(this);
-        r3.addView(Ui.statCell(this, hm(settings.getScreenMin()), "Screen on", Ui.TEXT));
-        r3.addView(Ui.statCell(this, hm(settings.getWorkDistractMin()), "Work distractions", Ui.WARN));
+        r3.addView(Ui.statCell(this, hm(settings.getScreenMin()), "Screen on",
+                overColor("screen", settings.getScreenMin(), Ui.TEXT)));
+        r3.addView(Ui.statCell(this, hm(settings.getWorkDistractMin()), "Work distractions",
+                overColor("work_distract", settings.getWorkDistractMin(), Ui.WARN)));
         glance.addView(r3);
         root.addView(glance);
+
+        // --- Got home from work (yesterday + this week) ---
+        root.addView(buildHomeByCard());
 
         // --- YouTube where? ---
         LinearLayout yt = Ui.card(this);
@@ -115,7 +120,8 @@ public class DashboardActivity extends AppCompatActivity {
         int sleepMin = Math.max(0, settings.getSleepMin());
         int togetherAwake = Math.max(0, together - sleepMin);
         LinearLayout togRow = Ui.statRow(this);
-        togRow.addView(Ui.statCell(this, hm(together), "Together today", Ui.GOOD));
+        togRow.addView(Ui.statCell(this, hm(together), "Together today",
+                underColor("together", together, Ui.GOOD)));
         togRow.addView(Ui.statCell(this, hm(togetherAwake), "Together awake", Ui.ACCENT));
         tog.addView(togRow);
         TextView togHint = Ui.label(this, together == 0
@@ -558,5 +564,23 @@ public class DashboardActivity extends AppCompatActivity {
         if (minutes < 60) return minutes + "m";
         int h = minutes / 60, m = minutes % 60;
         return m == 0 ? h + "h" : h + "h " + m + "m";
+    }
+
+    /** "Stay under" limit: returns the warning color if value has reached/passed
+     *  the user's limit for this metric; otherwise the default color. No limit
+     *  set (-1) → always default. */
+    private int overColor(String metric, int value, int defaultColor) {
+        int limit = settings.getThreshold(metric);
+        if (limit < 0) return defaultColor;
+        return value >= limit ? Ui.WARN : defaultColor;
+    }
+
+    /** "Reach at least" goal: returns the default (good) color once value meets
+     *  or exceeds the goal; otherwise a muted color (you haven't hit it yet).
+     *  No goal set (-1) → always default. */
+    private int underColor(String metric, int value, int defaultColor) {
+        int goal = settings.getThreshold(metric);
+        if (goal < 0) return defaultColor;
+        return value >= goal ? defaultColor : Ui.MUTED;
     }
 }

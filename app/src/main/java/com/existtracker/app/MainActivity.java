@@ -258,6 +258,19 @@ public class MainActivity extends AppCompatActivity {
         root.addView(postToggle("Got home from work (time)", "home_arrival", "got_home_time"));
         root.addView(postToggle("Got to work (time)", "work_arrival", "got_to_work_time"));
 
+        // --- Dashboard color thresholds ---
+        root.addView(section("Dashboard colors (optional)"));
+        root.addView(note("Set a daily limit (in minutes) for a metric and its "
+                + "dashboard number turns amber once you cross it. Leave blank for "
+                + "no color change. \"Together\" is a goal: it stays green once you "
+                + "reach it, muted until then."));
+        root.addView(thresholdRow("Time at work — warn over", "hospital"));
+        root.addView(thresholdRow("YouTube (all) — warn over", "youtube"));
+        root.addView(thresholdRow("Social (Insta+FB) — warn over", "social"));
+        root.addView(thresholdRow("Screen time — warn over", "screen"));
+        root.addView(thresholdRow("Work distractions — warn over", "work_distract"));
+        root.addView(thresholdRow("Time together — goal (at least)", "together"));
+
         // --- Step 6: backup / restore ---
         root.addView(section("Step 6 — Backup & restore"));
         root.addView(note("Save all your settings (and history) to a file so a new "
@@ -672,6 +685,36 @@ public class MainActivity extends AppCompatActivity {
                 }));
         box.addView(choose);
 
+        return box;
+    }
+
+    /** A labeled minutes-input row for a dashboard color threshold. Blank = none. */
+    private View thresholdRow(String label, String metric) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(0, dp(6), 0, dp(6));
+
+        TextView t = new TextView(this);
+        t.setText(label + " (min):");
+        t.setTextSize(13);
+        t.setTextColor(Ui.TEXT);
+        box.addView(t);
+
+        EditText et = new EditText(this);
+        darkEt(et);
+        et.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        et.setHint("blank = no color change");
+        int cur = settings.getThreshold(metric);
+        if (cur >= 0) et.setText(String.valueOf(cur));
+        fieldSavers.add(() -> {
+            String s = et.getText().toString().trim();
+            if (s.isEmpty()) settings.setThreshold(metric, -1);
+            else {
+                try { settings.setThreshold(metric, Integer.parseInt(s)); }
+                catch (NumberFormatException e) { settings.setThreshold(metric, -1); }
+            }
+        });
+        box.addView(et);
         return box;
     }
 

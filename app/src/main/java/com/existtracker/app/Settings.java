@@ -121,6 +121,16 @@ public class Settings {
     public String getAttrFor(String metric, String dflt) { return prefs.getString("attr_" + metric, dflt); }
     public void setAttrFor(String metric, String v) { prefs.edit().putString("attr_" + metric, v).apply(); }
 
+    // ----- Per-metric dashboard color thresholds (in MINUTES). -----
+    // A threshold of -1 (default) means "no threshold set" → never recolors.
+    // Direction: most are "stay under" limits (turn warning when value >= limit).
+    // "Together" metrics are "reach at least" goals (warning when value < goal,
+    // i.e. you haven't hit your target yet) — handled by getThresholdColorBelow.
+    public int getThreshold(String metric) { return prefs.getInt("thresh_" + metric, -1); }
+    public void setThreshold(String metric, int minutes) {
+        prefs.edit().putInt("thresh_" + metric, minutes).apply();
+    }
+
     // For app-usage: remember total foreground seconds seen so far today,
     // so we count only the delta each tick.
     public long getUsageBaseline(String key) { return prefs.getLong("usage_" + key, -1); }

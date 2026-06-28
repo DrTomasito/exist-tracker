@@ -20,6 +20,8 @@ import java.util.List;
 public class TrendsActivity extends AppCompatActivity {
 
     private Settings settings;
+    private int rangeDays = 30;               // master-graph window; default ~1 month
+    private LinearLayout masterContainer;     // holds the two overlay graphs
 
     @Override
     protected void onCreate(Bundle b) {
@@ -53,6 +55,13 @@ public class TrendsActivity extends AppCompatActivity {
         sub.setPadding(0, 0, 0, dp(12));
         root.addView(sub);
         root.addView(Ui.navRow(this, "trends"));
+
+        // --- Master overlay graphs (range-selectable) ---
+        root.addView(buildRangeSelector());
+        masterContainer = new LinearLayout(this);
+        masterContainer.setOrientation(LinearLayout.VERTICAL);
+        root.addView(masterContainer);
+        populateMasterGraphs();
 
         addMetric(root, "Work (Hospital) — weekly avg/day", "hospital",
                 Color.parseColor("#1565C0"));
@@ -153,6 +162,103 @@ public class TrendsActivity extends AppCompatActivity {
         root.addView(back);
 
         return scroll;
+    }
+
+    /** Row of range buttons (1mo / 3mo / 6mo / 1yr / All) that redraw the
+     *  master overlay graphs without rebuilding the whole screen. */
+    private View buildRangeSelector() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setPadding(0, dp(4), 0, dp(4));
+        int[] days = {30, 90, 180, 365, 3650};
+        String[] names = {"1mo", "3mo", "6mo", "1yr", "All"};
+        for (int i = 0; i < days.length; i++) {
+            final int dval = days[i];
+            Button b = new Button(this);
+            b.setText(names[i]);
+            b.setAllCaps(false);
+            b.setTextSize(12);
+            b.setTextColor(rangeDays == dval ? Ui.BG : Ui.TEXT);
+            b.setBackgroundColor(rangeDays == dval ? Ui.ACCENT : Ui.CARD);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            lp.setMargins(dp(2), 0, dp(2), 0);
+            b.setLayoutParams(lp);
+            b.setOnClickListener(v -> {
+                rangeDays = dval;
+                // Refresh the selector (to recolor the active button) + graphs.
+                LinearLayout parent = (LinearLayout) ((View) v.getParent());
+                refreshRangeButtons(parent);
+                populateMasterGraphs();
+            });
+            row.addView(b);
+        }
+        return row;
+    }
+
+    private void refreshRangeButtons(LinearLayout row) {
+        int[] days = {30, 90, 180, 365, 3650};
+        for (int i = 0; i < row.getChildCount() && i < days.length; i++) {
+            Button b = (Button) row.getChildAt(i);
+            boolean active = rangeDays == days[i];
+            b.setTextColor(active ? Ui.BG : Ui.TEXT);
+            b.setBackgroundColor(active ? Ui.ACCENT : Ui.CARD);
+        }
+    }
+
+    /** Build the two overlay graphs into masterContainer for the current range. */
+    private void populateMasterGraphs() {
+        masterContainer.removeAllViews();
+
+        // Graph 1 — "big time" metrics: work + time together.
+        MultiLineChartView g1 = new MultiLineChartView(this);
+        g1.setTitle("Big-picture time — " + rangeLabel());
+        g1.setXLabels(addSeriesTo(g1, new String[]{"hospital", "together"},
+                new String[]{"Work", "Together"},
+                new int[]{Ui.ACCENT, Ui.GOOD}));
+        g1.setLayoutParams(chartParams());
+        masterContainer.addView(g1);
+
+        // Graph 2 — "small time" metrics: social + youtube + screen.
+        MultiLineChartView g2 = new MultiLineChartView(this);
+        g2.setTitle("Distractions — " + rangeLabel());
+        g2.setXLabels(addSeriesTo(g2, new String[]{"social", "youtube", "screen"},
+                new String[]{"Social", "YouTube", "Screen"},
+                new int[]{Ui.WARN, Color.parseColor("#F2B441"), Ui.MUTED}));
+        g2.setLayoutParams(chartParams());
+        masterContainer.addView(g2);
+    }
+
+    /** Add the given metrics as series to a chart; returns the shared x-labels. */
+    private java.util.List<String> addSeriesTo(MultiLineChartView chart,
+            String[] metrics, String[] names, int[] colors) {
+        chart.clearSeries();
+        java.util.List<String> labels = null;
+        for (int i = 0; i < metrics.length; i++) {
+            Trends.RangeSeries rs = Trends.seriesOverRange(
+                    settings.getHistory(metrics[i]), rangeDays);
+            if (labels == null) labels = rs.labels; // all share the same window
+            chart.addSeries(new MultiLineChartView.Series(names[i], colors[i], rs.values));
+        }
+        return labels != null ? labels : new java.util.ArrayList<>();
+    }
+
+    private LinearLayout.LayoutParams chartParams() {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, dp(6), 0, dp(10));
+        return lp;
+    }
+
+    private String rangeLabel() {
+        switch (rangeDays) {
+            case 30: return "last month";
+            case 90: return "last 3 months";
+            case 180: return "last 6 months";
+            case 365: return "last year";
+            default: return "all time";
+        }
     }
 
     private void addMetric(LinearLayout root, String title, String metric, int color) {
