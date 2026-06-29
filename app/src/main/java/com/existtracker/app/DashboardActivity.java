@@ -99,6 +99,11 @@ public class DashboardActivity extends AppCompatActivity {
         glance.addView(r3);
         root.addView(glance);
 
+        // Weekly byline — summary of the last completed Mon–Fri work week,
+        // flips each Friday 7pm. Below "Today so far".
+        View byline = buildWeeklyByline();
+        if (byline != null) root.addView(byline);
+
         // --- Got home from work (yesterday + this week) ---
         root.addView(buildHomeByCard());
 
@@ -295,6 +300,112 @@ public class DashboardActivity extends AppCompatActivity {
 
     /** "Got home" card: yesterday's arrival time (reference) + this week's list.
      *  All SSID-derived (no GPS). Shows "—" for days with no captured arrival. */
+    /** Weekly byline: 1–2 sentences summarizing the most recently completed
+     *  Mon–Fri work week. "Flips" to the latest week each Friday at 7pm.
+     *  Returns null if there's no data for the target week yet. */
+    private View buildWeeklyByline() {
+        // Determine the Monday of the work week we're summarizing.
+        // Before Friday 7pm, summarize LAST week; from Friday 7pm on, this week.
+        java.util.Calendar now = java.util.Calendar.getInstance();
+        int dow = now.get(java.util.Calendar.DAY_OF_WEEK); // Sun=1..Sat=7
+        int hour = now.get(java.util.Calendar.HOUR_OF_DAY);
+        boolean fridayEveningOrLater =
+                (dow > java.util.Calendar.FRIDAY) // Sat/Sun
+                || (dow == java.util.Calendar.FRIDAY && hour >= 19);
+
+        // Monday of the CURRENT week.
+        java.util.Calendar mon = (java.util.Calendar) now.clone();
+        int back = (dow == java.util.Calendar.SUNDAY) ? 6 : dow - java.util.Calendar.MONDAY;
+        mon.add(java.util.Calendar.DAY_OF_MONTH, -back);
+        if (!fridayEveningOrLater) {
+            mon.add(java.util.Calendar.DAY_OF_MONTH, -7); // last week
+        }
+
+        java.util.List<String> wk = weekdayKeys(mon);              // Mon–Fri target week
+        java.util.Calendar prevMon = (java.util.Calendar) mon.clone();
+        prevMon.add(java.util.Calendar.DAY_OF_MONTH, -7);
+        java.util.List<String> pwk = weekdayKeys(prevMon);        // Mon–Fri prior week
+
+        // Averages / totals for the target week.
+        double homeAvg = avgOver(settings.getHistory("home"), wk);
+        int screenTotal = sumOver(settings.getHistory("screen"), wk);
+        int screenHomeTotal = sumOver(settings.getHistory("screen_home"), wk);
+        int dinners = trueCountOver(settings.getInferenceHistory("home_for_dinner"), wk);
+
+        // If we have essentially no data for this week, don't show the card yet.
+        if (homeAvg <= 0 && screenTotal <= 0 && dinners <= 0) return null;
+
+        // Prior-week dinner count for the comparison (only if prior week has data).
+        int prevDinners = trueCountOver(settings.getInferenceHistory("home_for_dinner"), pwk);
+        boolean havePrev = !overlaps(settings.getInferenceHistory("home_for_dinner"), pwk).isEmpty();
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("Last week you averaged ").append(hmShort((int) Math.round(homeAvg)))
+          .append(" at home per day, with ").append(hmShort(screenTotal))
+          .append(" of screen time (").append(hmShort(screenHomeTotal))
+          .append(" at home). You made it home for dinner ")
+          .append(dinners).append(dinners == 1 ? " night" : " nights").append(".");
+
+        if (havePrev) {
+            if (dinners > prevDinners)
+                sb.append(" That's up from ").append(prevDinners).append(" the week before.");
+            else if (dinners < prevDinners)
+                sb.append(" That's down from ").append(prevDinners).append(" the week before.");
+            else
+                sb.append(" Same as the week before.");
+        }
+
+        LinearLayout card = Ui.card(this);
+        card.addView(Ui.eyebrow(this, "Your week"));
+        TextView t = new TextView(this);
+        t.setText(sb.toString());
+        t.setTextColor(Ui.TEXT);
+        t.setTextSize(14);
+        t.setLineSpacing(Ui.dp(this, 2), 1f);
+        card.addView(t);
+        return card;
+    }
+
+    /** Mon–Fri date keys for the week starting at the given Monday. */
+    private java.util.List<String> weekdayKeys(java.util.Calendar monday) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        java.util.Calendar c = (java.util.Calendar) monday.clone();
+        for (int i = 0; i < 5; i++) { // Mon..Fri
+            out.add(fmtCal(c));
+            c.add(java.util.Calendar.DAY_OF_MONTH, 1);
+        }
+        return out;
+    }
+
+    private double avgOver(java.util.TreeMap<String, Integer> hist, java.util.List<String> keys) {
+        int sum = 0, n = 0;
+        for (String k : keys) { Integer v = hist.get(k); if (v != null) { sum += v; n++; } }
+        return n == 0 ? 0 : (double) sum / n;
+    }
+    private int sumOver(java.util.TreeMap<String, Integer> hist, java.util.List<String> keys) {
+        int sum = 0;
+        for (String k : keys) { Integer v = hist.get(k); if (v != null) sum += v; }
+        return sum;
+    }
+    private int trueCountOver(java.util.TreeMap<String, Integer> hist, java.util.List<String> keys) {
+        int c = 0;
+        for (String k : keys) { Integer v = hist.get(k); if (v != null && v == 1) c++; }
+        return c;
+    }
+    private java.util.List<String> overlaps(java.util.TreeMap<String, Integer> hist, java.util.List<String> keys) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (String k : keys) if (hist.containsKey(k)) out.add(k);
+        return out;
+    }
+
+    /** Compact "Xh Ym" / "Ym" formatter for the byline. */
+    private String hmShort(int minutes) {
+        if (minutes <= 0) return "0m";
+        int h = minutes / 60, m = minutes % 60;
+        if (h == 0) return m + "m";
+        return m == 0 ? h + "h" : h + "h " + m + "m";
+    }
+
     private View buildHomeByCard() {
         LinearLayout card = Ui.card(this);
         card.addView(Ui.eyebrow(this, "Got home from work"));

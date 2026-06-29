@@ -129,6 +129,9 @@ public class TrendsActivity extends AppCompatActivity {
         // Church attendance — days per month (count of days with any church time).
         addChurchPanel(root);
 
+        // Inference summaries — counts over the last 30 / 90 days.
+        addInferencePanel(root);
+
         // Stopwatch trends (one chart per stopwatch that has history).
         Stopwatches sw = new Stopwatches(this);
         for (Stopwatches.SW s : sw.getAll()) {
@@ -311,6 +314,61 @@ public class TrendsActivity extends AppCompatActivity {
             if (mi >= 0 && mi < 12) return names[mi] + " " + p[0];
         } catch (Exception ignored) {}
         return ym;
+    }
+
+    /** Summary of the hardwired inferences as counts over recent windows.
+     *  Most useful: how many weekdays home for dinner. */
+    private void addInferencePanel(LinearLayout root) {
+        // (key, label) pairs we want to show as "X of Y days" tallies.
+        String[][] items = {
+                {"home_for_dinner", "Home for dinner (by 6:05pm, weekdays)"},
+                {"rounds", "Made rounds (weekdays)"},
+                {"choir", "Choir day (Sundays)"},
+                {"late_church", "Late to church (Sundays)"},
+                {"weekend_out", "Out & about (weekends)"},
+        };
+        // Build only if there's at least one inference recorded.
+        boolean any = false;
+        for (String[] it : items)
+            if (!settings.getInferenceHistory(it[0]).isEmpty()) { any = true; break; }
+        if (!any) return;
+
+        LinearLayout card = Ui.card(this);
+        card.addView(Ui.eyebrow(this, "Patterns — last 30 days"));
+        for (String[] it : items) {
+            java.util.TreeMap<String, Integer> hist = settings.getInferenceHistory(it[0]);
+            if (hist.isEmpty()) continue;
+            String cutoff = dateNDaysAgoStr(30);
+            int trueCount = 0, total = 0;
+            for (java.util.Map.Entry<String, Integer> e : hist.entrySet()) {
+                if (e.getKey().compareTo(cutoff) < 0) continue;
+                total++;
+                if (e.getValue() != null && e.getValue() == 1) trueCount++;
+            }
+            if (total == 0) continue;
+            LinearLayout line = new LinearLayout(this);
+            line.setOrientation(LinearLayout.HORIZONTAL);
+            line.setPadding(dp(4), dp(3), dp(4), dp(3));
+            TextView lbl = new TextView(this);
+            lbl.setText(it[1]);
+            lbl.setTextColor(Ui.MUTED); lbl.setTextSize(13);
+            lbl.setLayoutParams(new LinearLayout.LayoutParams(0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            TextView val = new TextView(this);
+            val.setText(trueCount + " / " + total);
+            val.setTextColor(Ui.TEXT); val.setTextSize(13);
+            line.addView(lbl); line.addView(val);
+            card.addView(line);
+        }
+        root.addView(card);
+    }
+
+    private String dateNDaysAgoStr(int n) {
+        java.util.Calendar c = java.util.Calendar.getInstance();
+        c.add(java.util.Calendar.DAY_OF_MONTH, -n);
+        return String.format(java.util.Locale.US, "%04d-%02d-%02d",
+                c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH) + 1,
+                c.get(java.util.Calendar.DAY_OF_MONTH));
     }
 
     private void addMetric(LinearLayout root, String title, String metric, int color) {
