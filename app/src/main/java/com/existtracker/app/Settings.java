@@ -187,6 +187,17 @@ public class Settings {
         prefs.edit().putBoolean("infer_" + key, on).apply();
     }
 
+    // ----- Inference RESULTS: a dated 0/1 flag per inference key, stored as
+    // history so they count over time and sync to the cloud. Key form:
+    // "inf_<key>_<date>" = 1 (true) or 0 (false). Only days where the inference
+    // was evaluated get a row (e.g. weekday-only ones skip weekends). -----
+    public void saveInference(String key, String date, boolean value) {
+        prefs.edit().putInt("inf_" + key + "_" + date, value ? 1 : 0).apply();
+    }
+    public java.util.TreeMap<String, Integer> getInferenceHistory(String key) {
+        return scan("inf_" + key + "_");
+    }
+
     // For app-usage: remember total foreground seconds seen so far today,
     // so we count only the delta each tick.
     public long getUsageBaseline(String key) { return prefs.getLong("usage_" + key, -1); }

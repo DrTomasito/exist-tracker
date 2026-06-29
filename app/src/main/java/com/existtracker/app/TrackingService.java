@@ -404,6 +404,10 @@ public class TrackingService extends Service {
                     settings.saveChurchArrival(date, settings.getChurchArrivalToday());
                 settings.saveHistory("screen", date, settings.getScreenMin());
                 settings.saveHistory("sleep", date, Math.max(0, settings.getSleepMin()));
+
+                // Compute the hardwired inferences for the day (gated by their
+                // on/off toggles). Stored as dated 0/1 flags for counting + cloud.
+                computeInferences(date);
                 settings.saveHistory("yt_work", date, settings.getYtWork());
                 settings.saveHistory("yt_home", date, settings.getYtHome());
                 settings.saveHistory("yt_away", date, settings.getYtAway());
@@ -590,6 +594,70 @@ public class TrackingService extends Service {
         Calendar c = Calendar.getInstance();
         return String.format(java.util.Locale.US, "%04d-%02d-%02d",
                 c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH));
+    }
+
+    /**
+     * Compute the hardwired inferences for the given day from the day's raw
+     * location/time facts. Each is gated by its on/off toggle (Cloud Sync tab)
+     * and stored as a dated 0/1 flag (so they can be counted over time and
+     * synced). These are intentionally simple, stable rules; richer/probabilistic
+     * interpretation is left to the couples-app AI.
+     *
+     * Thresholds (minutes from midnight):
+     *   choir         = at church by 10:00am (<=600) on a Sunday
+     *   late_church   = at church after 11:07am (>667) on a Sunday
+     *   rounds        = at hospital before 6:45am (<405) on a weekday
+     *   home_for_dinner = home from work by 6:05pm (<=1085) on a weekday
+     *   weekend_out   = a weekend day with meaningful time away from home
+     *                   (home minutes well below an at-home day) and not at work
+     */
+    private void computeInferences(String date) {
+        int dow = dayOfWeekFor(date); // Calendar.SUNDAY..SATURDAY
+        boolean isSunday = dow == Calendar.SUNDAY;
+        boolean isWeekend = dow == Calendar.SATURDAY || dow == Calendar.SUNDAY;
+        boolean isWeekday = !isWeekend;
+
+        int churchArr = settings.getChurchArrivalToday(); // -1 if no church today
+        int workArr   = settings.getArrivalToday();        // -1 if never at work
+        int homeArr   = settings.getHomeArrivalToday();     // -1 if no home-from-work
+
+        // Choir day — only evaluated on Sundays when church was attended.
+        if (settings.inferenceEnabled("choir") && isSunday && churchArr >= 0) {
+            settings.saveInference("choir", date, churchArr <= 600);
+        }
+        // Late to church — only on Sundays when church was attended.
+        if (settings.inferenceEnabled("late_church") && isSunday && churchArr >= 0) {
+            settings.saveInference("late_church", date, churchArr > 667);
+        }
+        // Made rounds — weekday, when there was a work arrival.
+        if (settings.inferenceEnabled("rounds") && isWeekday && workArr >= 0) {
+            settings.saveInference("rounds", date, workArr < 405);
+        }
+        // Home for dinner — weekday; true if home-from-work by 6:05pm. If TJ
+        // went to work but never registered a home-from-work arrival, that's a
+        // "false" (not home in time). Days he never went to work are skipped.
+        if (settings.inferenceEnabled("home_for_dinner") && isWeekday && workArr >= 0) {
+            boolean home = homeArr >= 0 && homeArr <= 1085;
+            settings.saveInference("home_for_dinner", date, home);
+        }
+        // Weekend out and about — weekend day, not at work, where time at home
+        // was well under a full at-home day (proxy: home minutes < 600 = under
+        // 10h home while awake), implying meaningful time out as a couple/family.
+        if (settings.inferenceEnabled("weekend_out") && isWeekend && workArr < 0) {
+            boolean out = settings.getHomeMin() < 600;
+            settings.saveInference("weekend_out", date, out);
+        }
+    }
+
+    private int dayOfWeekFor(String date) {
+        try {
+            String[] p = date.split("-");
+            Calendar c = Calendar.getInstance();
+            c.set(Integer.parseInt(p[0]), Integer.parseInt(p[1]) - 1, Integer.parseInt(p[2]));
+            return c.get(Calendar.DAY_OF_WEEK);
+        } catch (Exception e) {
+            return Calendar.MONDAY;
+        }
     }
 
     // ---- Daily alarms (11:50 post, 11:58 clear) ----
