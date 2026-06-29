@@ -33,6 +33,7 @@ public class TrackingService extends Service {
 
     public static final String ACTION_POST  = "com.existtracker.app.POST";
     public static final String ACTION_CLEAR = "com.existtracker.app.CLEAR";
+    public static final String ACTION_SYNC_NOW = "com.existtracker.app.SYNC_NOW";
 
     private static final String CHANNEL = "tracking";
     private static final long SAMPLE_MS = 60_000L; // sample once a minute
@@ -91,7 +92,10 @@ public class TrackingService extends Service {
     private void flushScreenTime(long now) {
         if (screenOnSinceElapsed > 0) {
             int mins = (int) Math.round((now - screenOnSinceElapsed) / 60000.0);
-            if (mins > 0) settings.addScreen(mins);
+            if (mins > 0) {
+                settings.addScreen(mins);
+                if ("home".equals(currentBucket)) settings.addScreenHome(mins);
+            }
             screenOnSinceElapsed = -1;
         }
     }
@@ -102,6 +106,17 @@ public class TrackingService extends Service {
             if (ACTION_POST.equals(intent.getAction())) {
                 postToExist();
                 scheduleDailyAlarms(); // re-arm for tomorrow
+            } else if (ACTION_SYNC_NOW.equals(intent.getAction())) {
+                // Manual "sync now" (pull-to-refresh): post to Exist AND push to
+                // cloud unconditionally (ignores the auto-backup toggle), so the
+                // user can force everything up to date on demand.
+                postToExist();
+                try {
+                    CloudSync cloud = new CloudSync(this);
+                    if (cloud.isConfigured()) cloud.backupNow();
+                } catch (Exception ce) {
+                    settings.setCloudLastStatus("Manual cloud sync failed: " + ce.getMessage());
+                }
             } else if (ACTION_CLEAR.equals(intent.getAction())) {
                 settings.clearCounters();
                 settings.clearUsageBaselines();
@@ -198,6 +213,9 @@ public class TrackingService extends Service {
             int mins = (int) Math.round((nowMs - screenOnSinceElapsed) / 60000.0);
             if (mins > 0) {
                 settings.addScreen(mins);
+                // Also bank screen time at home (calculated metric: how much of
+                // screen time happened while on the home WiFi).
+                if ("home".equals(currentBucket)) settings.addScreenHome(mins);
                 screenOnSinceElapsed = nowMs; // reset baseline, keep counting
             }
         }
@@ -366,6 +384,7 @@ public class TrackingService extends Service {
 
                 // Optional extra metrics — only posted if the user enabled them.
                 postIfEnabled(api, "screen", "Screen Time", "media", date, settings.getScreenMin());
+                postIfEnabled(api, "screen_home", "Screen Time at Home", "media", date, settings.getScreenHome());
                 postIfEnabled(api, "sleep", "Time Asleep", "sleep", date, Math.max(0, settings.getSleepMin()));
                 postIfEnabled(api, "yt_work", "YouTube at Work", "social", date, settings.getYtWork());
                 postIfEnabled(api, "yt_home", "YouTube at Home", "social", date, settings.getYtHome());
@@ -380,6 +399,7 @@ public class TrackingService extends Service {
                 settings.saveHistory("social", date, settings.getSocialMin());
                 settings.saveHistory("driving", date, settings.getDrivingMin());
                 settings.saveHistory("church", date, settings.getChurchMin());
+                settings.saveHistory("screen_home", date, settings.getScreenHome());
                 if (settings.getChurchArrivalToday() >= 0)
                     settings.saveChurchArrival(date, settings.getChurchArrivalToday());
                 settings.saveHistory("screen", date, settings.getScreenMin());
@@ -493,6 +513,7 @@ public class TrackingService extends Service {
     private String defaultAttrName(String metric) {
         switch (metric) {
             case "screen": return "screen_time";
+            case "screen_home": return "screen_time_at_home";
             case "sleep": return "time_asleep";
             case "yt_work": return "youtube_at_work";
             case "yt_home": return "youtube_at_home";

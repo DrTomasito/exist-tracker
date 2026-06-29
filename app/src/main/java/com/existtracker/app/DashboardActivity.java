@@ -173,7 +173,29 @@ public class DashboardActivity extends AppCompatActivity {
         root.addView(navButton("⚙️  Settings & connections", () ->
                 startActivity(new Intent(this, MainActivity.class))));
 
-        return scroll;
+        // Wrap in pull-to-refresh: swipe down to force an immediate sync to
+        // Exist + cloud (regardless of the nightly auto-post / auto-backup).
+        androidx.swiperefreshlayout.widget.SwipeRefreshLayout refresh =
+                new androidx.swiperefreshlayout.widget.SwipeRefreshLayout(this);
+        refresh.setColorSchemeColors(Ui.ACCENT, Ui.GOOD);
+        refresh.setProgressBackgroundColorSchemeColor(Ui.CARD);
+        refresh.addView(scroll);
+        refresh.setOnRefreshListener(() -> {
+            // Fire the service action that posts to Exist + pushes to cloud.
+            try {
+                startService(new Intent(this, TrackingService.class)
+                        .setAction(TrackingService.ACTION_SYNC_NOW));
+            } catch (Exception ignored) {}
+            android.widget.Toast.makeText(this, "Syncing to Exist + cloud…",
+                    android.widget.Toast.LENGTH_SHORT).show();
+            // The service work runs in the background; stop the spinner shortly
+            // after and refresh the dashboard so any new values show.
+            refresh.postDelayed(() -> {
+                refresh.setRefreshing(false);
+                setContentView(build());
+            }, 2500);
+        });
+        return refresh;
     }
 
     // Proportional 3-segment bar for work/home/away.

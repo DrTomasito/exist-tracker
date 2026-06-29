@@ -254,6 +254,7 @@ public class MainActivity extends AppCompatActivity {
                 + "post it to Exist, and set its attribute name."));
 
         root.addView(postToggle("Phone screen time", "screen", "screen_time"));
+        root.addView(postToggle("Screen time at home", "screen_home", "screen_time_at_home"));
         root.addView(postToggle("Time asleep (Health Connect)", "sleep", "time_asleep"));
         root.addView(postToggle("YouTube at work", "yt_work", "youtube_at_work"));
         root.addView(postToggle("YouTube at home", "yt_home", "youtube_at_home"));
@@ -380,6 +381,12 @@ public class MainActivity extends AppCompatActivity {
                     .show();
         });
         root.addView(listBtn);
+
+        Button cloudSyncBtn = new Button(this);
+        cloudSyncBtn.setText("Cloud Sync settings & annotations →");
+        cloudSyncBtn.setOnClickListener(v ->
+                startActivity(new Intent(this, CloudSyncActivity.class)));
+        root.addView(cloudSyncBtn);
 
         // --- Step 6: backup / restore ---
         root.addView(section("Step 6 — Backup & restore"));

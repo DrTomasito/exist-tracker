@@ -75,6 +75,7 @@ public class Settings {
     public int getSocialMin()   { return prefs.getInt("c_social", 0); }
     public int getDrivingMin()  { return prefs.getInt("c_driving", 0); }
     public int getChurchMin()   { return prefs.getInt("c_church", 0); }
+    public int getScreenHome()  { return prefs.getInt("c_screen_home", 0); }
 
     public void addHospital(int m){ prefs.edit().putInt("c_hospital", getHospitalMin()+m).apply(); }
     public void addHome(int m)    { prefs.edit().putInt("c_home", getHomeMin()+m).apply(); }
@@ -82,6 +83,7 @@ public class Settings {
     public void addSocial(int m)  { prefs.edit().putInt("c_social", getSocialMin()+m).apply(); }
     public void addDriving(int m) { prefs.edit().putInt("c_driving", getDrivingMin()+m).apply(); }
     public void addChurch(int m)  { prefs.edit().putInt("c_church", getChurchMin()+m).apply(); }
+    public void addScreenHome(int m) { prefs.edit().putInt("c_screen_home", getScreenHome()+m).apply(); }
 
     // Church arrival = first time connected to church WiFi today (minute of day).
     // Captured for backend inferences (late-to-church, choir) — not shown in app.
@@ -105,6 +107,7 @@ public class Settings {
                 .putInt("work_distract", 0).putInt("work_youtube", 0)
                 .putInt("c_together", 0)
                 .putInt("c_church", 0)
+                .putInt("c_screen_home", 0)
                 .apply();
         clearArrivalDeparture();
         clearHomeArrival();
@@ -162,6 +165,27 @@ public class Settings {
     public void setCloudDevice(String v) { prefs.edit().putString("cloud_device", v).apply(); }
     public void setCloudAuto(boolean b)  { prefs.edit().putBoolean("cloud_auto", b).apply(); }
     public void setCloudLastStatus(String v) { prefs.edit().putString("cloud_last", v).apply(); }
+
+    // ----- Per-tracker annotations (private context describing what a tracker
+    // really measures + inferences it enables). Keyed by tracker id or metric
+    // name. Travels to the cloud to inform the couples app / AI. -----
+    public String getAnnotation(String key) { return prefs.getString("annot_" + key, ""); }
+    public void setAnnotation(String key, String v) {
+        prefs.edit().putString("annot_" + key, v).apply();
+    }
+    // All annotation keys currently stored (so cloud sync can enumerate them).
+    public java.util.List<String> getAnnotationKeys() {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (String k : prefs.getAll().keySet())
+            if (k.startsWith("annot_")) out.add(k.substring("annot_".length()));
+        return out;
+    }
+
+    // ----- Hardwired inference toggles (each can be turned off). Default ON. -----
+    public boolean inferenceEnabled(String key) { return prefs.getBoolean("infer_" + key, true); }
+    public void setInferenceEnabled(String key, boolean on) {
+        prefs.edit().putBoolean("infer_" + key, on).apply();
+    }
 
     // For app-usage: remember total foreground seconds seen so far today,
     // so we count only the delta each tick.

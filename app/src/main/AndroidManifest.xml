@@ -74,6 +74,10 @@
             android:name=".StopwatchActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".CloudSyncActivity"
+            android:exported="false" />
+
         <service
             android:name=".TrackingService"
             android:exported="false"

@@ -109,6 +109,8 @@ public class TrendsActivity extends AppCompatActivity {
         // --- Trend charts for the new metrics ---
         addMetric(root, "Phone screen time — weekly avg/day", "screen",
                 Color.parseColor("#00838F"));
+        addMetric(root, "Screen time at home — weekly avg/day", "screen_home",
+                Color.parseColor("#5BD1A0"));
         addMetric(root, "Home (awake) — weekly avg/day", "home_awake",
                 Color.parseColor("#2E7D32"));
         addMetric(root, "YouTube at Work — weekly avg/day", "yt_work",
@@ -225,9 +227,11 @@ public class TrendsActivity extends AppCompatActivity {
         // Graph 2 — "small time" metrics: social + youtube + screen.
         MultiLineChartView g2 = new MultiLineChartView(this);
         g2.setTitle("Distractions — " + rangeLabel());
-        g2.setXLabels(addSeriesTo(g2, new String[]{"social", "youtube", "screen"},
-                new String[]{"Social", "YouTube", "Screen"},
-                new int[]{Ui.WARN, Color.parseColor("#F2B441"), Ui.MUTED}));
+        g2.setXLabels(addSeriesTo(g2,
+                new String[]{"social", "youtube", "screen", "screen_home"},
+                new String[]{"Social", "YouTube", "Screen", "Screen@Home"},
+                new int[]{Ui.WARN, Color.parseColor("#F2B441"), Ui.MUTED,
+                        Color.parseColor("#5BD1A0")}));
         g2.setLayoutParams(chartParams());
         masterContainer.addView(g2);
     }
