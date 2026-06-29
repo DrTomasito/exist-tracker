@@ -32,6 +32,11 @@ public class Settings {
     }
     public boolean isLoggedIn() { return getAccessToken().length() > 0; }
 
+    // Whether the user WANTS tracking on (toggled from the dashboard). Defaults
+    // to true so tracking runs by default; set false only by the STOP action.
+    public boolean isTrackingDesired() { return prefs.getBoolean("tracking_desired", true); }
+    public void setTrackingDesired(boolean on) { prefs.edit().putBoolean("tracking_desired", on).apply(); }
+
     // ----- The five trackers. Each has: an attribute name, and the
     //       SSID / package / device value used to detect it. -----
 
@@ -81,6 +86,9 @@ public class Settings {
     public void addHome(int m)    { prefs.edit().putInt("c_home", getHomeMin()+m).apply(); }
     public void addYoutube(int m) { prefs.edit().putInt("c_youtube", getYoutubeMin()+m).apply(); }
     public void addSocial(int m)  { prefs.edit().putInt("c_social", getSocialMin()+m).apply(); }
+    // Authoritative daily totals (set from the OS usage stats, not accumulated).
+    public void setYoutube(int m) { prefs.edit().putInt("c_youtube", Math.max(0, m)).apply(); }
+    public void setSocial(int m)  { prefs.edit().putInt("c_social", Math.max(0, m)).apply(); }
     public void addDriving(int m) { prefs.edit().putInt("c_driving", getDrivingMin()+m).apply(); }
     public void addChurch(int m)  { prefs.edit().putInt("c_church", getChurchMin()+m).apply(); }
     public void addScreenHome(int m) { prefs.edit().putInt("c_screen_home", getScreenHome()+m).apply(); }
@@ -136,6 +144,12 @@ public class Settings {
     // ----- Sleep (read from Health Connect), minutes asleep last night -----
     public int getSleepMin() { return prefs.getInt("c_sleep", 0); }
     public void setSleepMin(int m) { prefs.edit().putInt("c_sleep", m).apply(); }
+    // Read sleep FROM Exist (Health Connect already syncs there) instead of
+    // reading Health Connect directly. When on, uses the attribute name below.
+    public boolean getSleepFromExist() { return prefs.getBoolean("sleep_from_exist", false); }
+    public void setSleepFromExist(boolean b) { prefs.edit().putBoolean("sleep_from_exist", b).apply(); }
+    public String getSleepExistAttr() { return prefs.getString("sleep_exist_attr", "time_asleep"); }
+    public void setSleepExistAttr(String v) { prefs.edit().putString("sleep_exist_attr", v).apply(); }
 
     // ----- Per-metric "also post to Exist" toggles (default off for new ones) -----
     public boolean postEnabled(String metric) { return prefs.getBoolean("post_" + metric, false); }
@@ -307,10 +321,25 @@ public class Settings {
         for (String key : prefs.getAll().keySet()) {
             if (key.startsWith(prefix)) {
                 String date = key.substring(prefix.length());
+                // Guard: only accept an exact date suffix (YYYY-MM-DD). This
+                // prevents metric "home" from also matching "home_awake_<date>"
+                // (whose suffix would be "awake_<date>", not a valid date).
+                if (!isDateStr(date)) continue;
                 out.put(date, prefs.getInt(key, 0));
             }
         }
         return out;
+    }
+
+    /** True if s is exactly YYYY-MM-DD (10 chars, digits + hyphens). */
+    private boolean isDateStr(String s) {
+        if (s == null || s.length() != 10) return false;
+        for (int i = 0; i < 10; i++) {
+            char c = s.charAt(i);
+            if (i == 4 || i == 7) { if (c != '-') return false; }
+            else if (c < '0' || c > '9') return false;
+        }
+        return true;
     }
 
     // ----- Export / import all settings (for moving to a new phone) -----

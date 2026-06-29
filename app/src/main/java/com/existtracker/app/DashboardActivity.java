@@ -30,6 +30,7 @@ public class DashboardActivity extends AppCompatActivity {
         super.onCreate(b);
         settings = new Settings(this);
         getWindow().getDecorView().setBackgroundColor(Ui.BG);
+        ensureTrackingRunning();
         setContentView(build());
     }
 
@@ -53,6 +54,9 @@ public class DashboardActivity extends AppCompatActivity {
         status.setPadding(0, Ui.dp(this, 6), 0, Ui.dp(this, 10));
         root.addView(status);
 
+        // Tracking on/off toggle with live status.
+        if (settings.isLoggedIn()) root.addView(buildTrackingToggle());
+
         // Consistent navigation across screens.
         root.addView(Ui.navRow(this, "dashboard"));
 
@@ -66,6 +70,12 @@ public class DashboardActivity extends AppCompatActivity {
         inOut.addView(Ui.statCell(this, dep < 0 ? "—" : Trends.minToClock(dep),
                 "Last seen", Ui.ACCENT));
         workCard.addView(inOut);
+        // Long-press the card to manually set/correct today's work arrival
+        // (for days WiFi was off, etc.). Updates the app + posts to Exist.
+        workCard.setOnLongClickListener(v -> {
+            editArrivalTime("work", settings.getArrivalToday());
+            return true;
+        });
         TextView hint = Ui.label(this, dep < 0
                 ? "Departure fills in through the day as your phone leaves the hospital WiFi."
                 : "“Last seen” becomes your departure time once you've left for the evening.");
@@ -303,6 +313,109 @@ public class DashboardActivity extends AppCompatActivity {
     /** Weekly byline: 1–2 sentences summarizing the most recently completed
      *  Mon–Fri work week. "Flips" to the latest week each Friday at 7pm.
      *  Returns null if there's no data for the target week yet. */
+    /** A card showing whether tracking is actively running, with a switch to
+     *  start/stop it. Green dot + "Tracking active" when the service is alive. */
+    /** Long-press handler: pick a time to manually set today's work or home
+     *  arrival (for days the WiFi auto-capture missed). Saves locally (today +
+     *  history) and fires a sync so Exist gets the corrected time. */
+    private void editArrivalTime(String which, int currentMin) {
+        java.util.Calendar c = java.util.Calendar.getInstance();
+        int hour = currentMin >= 0 ? currentMin / 60 : c.get(java.util.Calendar.HOUR_OF_DAY);
+        int min  = currentMin >= 0 ? currentMin % 60 : c.get(java.util.Calendar.MINUTE);
+        String title = which.equals("work")
+                ? "Set today's work arrival" : "Set today's got-home time";
+        android.app.TimePickerDialog dlg = new android.app.TimePickerDialog(this,
+                (view, h, m) -> {
+                    int minOfDay = h * 60 + m;
+                    String date = todayKey();
+                    if (which.equals("work")) {
+                        settings.setArrivalToday(minOfDay);
+                        settings.saveArrival(date, minOfDay);
+                    } else {
+                        settings.setHomeArrivalToday(minOfDay);
+                        settings.saveHomeArrival(date, minOfDay);
+                    }
+                    // Push to Exist + cloud so the correction propagates.
+                    try {
+                        startService(new Intent(this, TrackingService.class)
+                                .setAction(TrackingService.ACTION_SYNC_NOW));
+                    } catch (Exception ignored) {}
+                    android.widget.Toast.makeText(this,
+                            "Updated to " + Trends.minToClock(minOfDay),
+                            android.widget.Toast.LENGTH_SHORT).show();
+                    setContentView(build());
+                }, hour, min, false);
+        dlg.setTitle(title);
+        dlg.show();
+    }
+
+    private View buildTrackingToggle() {
+        boolean running = TrackingService.RUNNING;
+
+        LinearLayout card = Ui.card(this);
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+
+        // Status dot + label.
+        TextView dot = new TextView(this);
+        dot.setText("●");
+        dot.setTextSize(16);
+        dot.setTextColor(running ? Ui.GOOD : Ui.WARN);
+        dot.setPadding(0, 0, Ui.dp(this, 8), 0);
+        row.addView(dot);
+
+        LinearLayout labels = new LinearLayout(this);
+        labels.setOrientation(LinearLayout.VERTICAL);
+        labels.setLayoutParams(new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        TextView title = new TextView(this);
+        title.setText(running ? "Tracking active" : "Tracking off");
+        title.setTextColor(Ui.TEXT);
+        title.setTextSize(15);
+        TextView sub = new TextView(this);
+        sub.setText(running
+                ? "Running in the background. Logging your day."
+                : "Tap the switch to start tracking.");
+        sub.setTextColor(Ui.MUTED);
+        sub.setTextSize(12);
+        labels.addView(title);
+        labels.addView(sub);
+        row.addView(labels);
+
+        android.widget.Switch sw = new android.widget.Switch(this);
+        sw.setChecked(running);
+        sw.setOnCheckedChangeListener((v, on) -> {
+            if (on) {
+                settings.setTrackingDesired(true);
+                startForegroundService(new Intent(this, TrackingService.class));
+                android.widget.Toast.makeText(this, "Tracking started",
+                        android.widget.Toast.LENGTH_SHORT).show();
+            } else {
+                startService(new Intent(this, TrackingService.class)
+                        .setAction(TrackingService.ACTION_STOP));
+                android.widget.Toast.makeText(this, "Tracking stopped",
+                        android.widget.Toast.LENGTH_SHORT).show();
+            }
+            // Rebuild shortly so the dot/label reflect the new state.
+            card.postDelayed(() -> setContentView(build()), 600);
+        });
+        row.addView(sw);
+        card.addView(row);
+        return card;
+    }
+
+    /** If the user wants tracking and is logged in but the service isn't
+     *  running (e.g. just after install/update), start it automatically. */
+    private void ensureTrackingRunning() {
+        try {
+            if (settings.isLoggedIn() && settings.isTrackingDesired()
+                    && !TrackingService.RUNNING) {
+                startForegroundService(new Intent(this, TrackingService.class));
+            }
+        } catch (Exception ignored) {}
+    }
+
     private View buildWeeklyByline() {
         // Determine the Monday of the work week we're summarizing.
         // Before Friday 7pm, summarize LAST week; from Friday 7pm on, this week.
@@ -426,6 +539,11 @@ public class DashboardActivity extends AppCompatActivity {
                 todayMin >= 0 ? Trends.minToClock(todayMin) : "—",
                 "Today", Ui.ACCENT));
         card.addView(row);
+        // Long-press to manually set/correct TODAY's got-home time.
+        card.setOnLongClickListener(v -> {
+            editArrivalTime("home", settings.getHomeArrivalToday());
+            return true;
+        });
 
         // This week (Mon–today): one compact line per day with a time or dash.
         TextView wk = Ui.label(this, "This week");

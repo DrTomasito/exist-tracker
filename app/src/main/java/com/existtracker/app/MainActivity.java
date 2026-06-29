@@ -164,6 +164,24 @@ public class MainActivity extends AppCompatActivity {
         root.addView(permButton("Nearby devices / Bluetooth", v -> requestBluetooth()));
         root.addView(permButton("Usage access (for YouTube/social)", v -> openUsageAccess()));
         root.addView(permButton("Sleep access (Health Connect)", v -> requestSleep()));
+
+        // Alternative sleep source: read from Exist instead of Health Connect.
+        CheckBox sleepExist = new CheckBox(this);
+        sleepExist.setText("Read sleep from Exist instead of Health Connect");
+        sleepExist.setTextColor(Ui.TEXT);
+        sleepExist.setChecked(settings.getSleepFromExist());
+        sleepExist.setOnCheckedChangeListener((v, on) -> settings.setSleepFromExist(on));
+        root.addView(sleepExist);
+
+        EditText sleepAttr = new EditText(this);
+        darkEt(sleepAttr);
+        sleepAttr.setHint("Exist sleep attribute (e.g. time_asleep)");
+        sleepAttr.setText(settings.getSleepExistAttr());
+        fieldSavers.add(() -> {
+            String v = sleepAttr.getText().toString().trim();
+            if (!v.isEmpty()) settings.setSleepExistAttr(v);
+        });
+        root.addView(labeled("Exist sleep attribute", sleepAttr));
         root.addView(permButton("Disable battery optimization", v -> openBatterySettings()));
 
         // --- Step 3: what to track ---
@@ -255,7 +273,6 @@ public class MainActivity extends AppCompatActivity {
 
         root.addView(postToggle("Phone screen time", "screen", "screen_time"));
         root.addView(postToggle("Screen time at home", "screen_home", "screen_time_at_home"));
-        root.addView(postToggle("Time asleep (Health Connect)", "sleep", "time_asleep"));
         root.addView(postToggle("YouTube at work", "yt_work", "youtube_at_work"));
         root.addView(postToggle("YouTube at home", "yt_home", "youtube_at_home"));
         root.addView(postToggle("Social at work", "soc_work", "social_at_work"));

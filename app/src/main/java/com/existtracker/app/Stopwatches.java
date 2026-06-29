@@ -413,11 +413,24 @@ public class Stopwatches {
         String prefix = "total_" + id + "_";
         for (String key : prefs.getAll().keySet()) {
             if (key.startsWith(prefix)) {
+                String date = key.substring(prefix.length());
+                if (!isDateStr(date)) continue; // only exact YYYY-MM-DD suffixes
                 Object v = prefs.getAll().get(key);
-                if (v instanceof Integer) out.put(key.substring(prefix.length()), (Integer) v);
+                if (v instanceof Integer) out.put(date, (Integer) v);
             }
         }
         return out;
+    }
+
+    /** True if s is exactly YYYY-MM-DD. */
+    private boolean isDateStr(String s) {
+        if (s == null || s.length() != 10) return false;
+        for (int i = 0; i < 10; i++) {
+            char c = s.charAt(i);
+            if (i == 4 || i == 7) { if (c != '-') return false; }
+            else if (c < '0' || c > '9') return false;
+        }
+        return true;
     }
 
     // ---------- Session log ----------

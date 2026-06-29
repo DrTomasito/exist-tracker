@@ -10,7 +10,7 @@ public class BootReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
             Settings s = new Settings(context);
-            if (s.isLoggedIn()) {
+            if (s.isLoggedIn() && s.isTrackingDesired()) {
                 Intent svc = new Intent(context, TrackingService.class);
                 context.startForegroundService(svc);
             }
