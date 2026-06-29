@@ -54,6 +54,8 @@ public class Settings {
 
     public String getYoutubeAttr()  { return prefs.getString("youtube_attr", "youtube_time"); }
     public String getYoutubePkgs()  { return prefs.getString("youtube_pkgs", "com.google.android.youtube"); }
+    public String getClaudePkgs()   { return prefs.getString("claude_pkgs", "com.anthropic.claude"); }
+    public void setClaudePkgs(String v) { prefs.edit().putString("claude_pkgs", v).apply(); }
 
     public String getSocialAttr()   { return prefs.getString("social_attr", "social_media_time"); }
     public String getSocialPkgs()   { return prefs.getString("social_pkgs",
@@ -78,6 +80,18 @@ public class Settings {
     public int getHomeMin()     { return prefs.getInt("c_home", 0); }
     public int getYoutubeMin()  { return prefs.getInt("c_youtube", 0); }
     public int getSocialMin()   { return prefs.getInt("c_social", 0); }
+    // Claude usage (minutes). Phone (this device) + computer (pushed from
+    // ActivityWatch via the bridge, later). Combined total = phone + computer.
+    public int getClaudePhoneMin() { return prefs.getInt("c_claude_phone", 0); }
+    public void setClaudePhoneMin(int m) { prefs.edit().putInt("c_claude_phone", Math.max(0, m)).apply(); }
+    public int getClaudeComputerMin() { return prefs.getInt("c_claude_computer", 0); }
+    public void setClaudeComputerMin(int m) { prefs.edit().putInt("c_claude_computer", Math.max(0, m)).apply(); }
+    public int getClaudeTotalMin() { return getClaudePhoneMin() + getClaudeComputerMin(); }
+    // Claude minutes that occurred during "at work" time windows (timestamp-based,
+    // not SSID — since computer Claude use may be on a personal laptop).
+    public int getClaudeAtWorkMin() { return prefs.getInt("c_claude_atwork", 0); }
+    public void addClaudeAtWork(int m) { prefs.edit().putInt("c_claude_atwork", getClaudeAtWorkMin()+m).apply(); }
+    public void setClaudeAtWorkMin(int m) { prefs.edit().putInt("c_claude_atwork", Math.max(0, m)).apply(); }
     public int getDrivingMin()  { return prefs.getInt("c_driving", 0); }
     public int getChurchMin()   { return prefs.getInt("c_church", 0); }
     public int getScreenHome()  { return prefs.getInt("c_screen_home", 0); }
@@ -116,6 +130,8 @@ public class Settings {
                 .putInt("c_together", 0)
                 .putInt("c_church", 0)
                 .putInt("c_screen_home", 0)
+                .putInt("c_claude_phone", 0).putInt("c_claude_computer", 0)
+                .putInt("c_claude_atwork", 0)
                 .apply();
         clearArrivalDeparture();
         clearHomeArrival();
@@ -201,6 +217,17 @@ public class Settings {
         prefs.edit().putBoolean("infer_" + key, on).apply();
     }
 
+    // ----- Per-tracker external data source. When a tracker (e.g. "online
+    // gaming") has an external source key set, the bridge can auto-populate its
+    // daily minutes from an outside source (e.g. ActivityWatch). Empty = manual
+    // only. The key is matched by the bridge/Supabase row. -----
+    public String getTrackerSource(String trackerId) {
+        return prefs.getString("src_" + trackerId, "");
+    }
+    public void setTrackerSource(String trackerId, String sourceKey) {
+        prefs.edit().putString("src_" + trackerId, sourceKey).apply();
+    }
+
     // ----- Inference RESULTS: a dated 0/1 flag per inference key, stored as
     // history so they count over time and sync to the cloud. Key form:
     // "inf_<key>_<date>" = 1 (true) or 0 (false). Only days where the inference
@@ -217,7 +244,8 @@ public class Settings {
     public long getUsageBaseline(String key) { return prefs.getLong("usage_" + key, -1); }
     public void setUsageBaseline(String key, long v) { prefs.edit().putLong("usage_" + key, v).apply(); }
     public void clearUsageBaselines() {
-        prefs.edit().remove("usage_youtube").remove("usage_social").apply();
+        prefs.edit().remove("usage_youtube").remove("usage_social")
+                .remove("usage_claude_atwork_base").apply();
     }
 
     // ----- Work arrival / departure times (minutes-since-midnight) -----
@@ -260,6 +288,29 @@ public class Settings {
     // ----- Work-computer minutes pulled from the relay (extension) -----
     public int getWorkDistractMin() { return prefs.getInt("work_distract", 0); }
     public void setWorkDistractMin(int m) { prefs.edit().putInt("work_distract", m).apply(); }
+
+    // ----- Work Distractions: composed from up to three toggleable sources.
+    // 1) phone YT+FB+IG while on work WiFi (already tracked as yt_work+soc_work)
+    // 2) WakaTime external durations on distraction domains
+    // 3) the browser-extension relay (existing). work_distract = sum of enabled.
+    public boolean getWdPhoneEnabled()  { return prefs.getBoolean("wd_phone_on", true); }
+    public void setWdPhoneEnabled(boolean b) { prefs.edit().putBoolean("wd_phone_on", b).apply(); }
+    public boolean getWdWakaEnabled()   { return prefs.getBoolean("wd_waka_on", false); }
+    public void setWdWakaEnabled(boolean b) { prefs.edit().putBoolean("wd_waka_on", b).apply(); }
+    public boolean getWdRelayEnabled()  { return prefs.getBoolean("wd_relay_on", true); }
+    public void setWdRelayEnabled(boolean b) { prefs.edit().putBoolean("wd_relay_on", b).apply(); }
+    public boolean getWdClaudeEnabled() { return prefs.getBoolean("wd_claude_on", false); }
+    public void setWdClaudeEnabled(boolean b) { prefs.edit().putBoolean("wd_claude_on", b).apply(); }
+
+    public String getWakatimeKey() { return prefs.getString("wakatime_key", ""); }
+    public void setWakatimeKey(String v) { prefs.edit().putString("wakatime_key", v).apply(); }
+    public String getWakatimeDomains() {
+        return prefs.getString("wakatime_domains",
+                "facebook.com,instagram.com,youtube.com,engadget.com,theguardian.com,gizmodo.com");
+    }
+    public void setWakatimeDomains(String v) { prefs.edit().putString("wakatime_domains", v).apply(); }
+    public int getWakaDistractMin() { return prefs.getInt("waka_distract", 0); }
+    public void setWakaDistractMin(int m) { prefs.edit().putInt("waka_distract", Math.max(0, m)).apply(); }
     public int getWorkYoutubeMin() { return prefs.getInt("work_youtube", 0); }
     public void setWorkYoutubeMin(int m) { prefs.edit().putInt("work_youtube", m).apply(); }
 

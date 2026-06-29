@@ -202,8 +202,9 @@ public class AttributePicker {
         l3.setPadding(0, dp(10), 0, 0);
         box.addView(l3);
         final String[] vtLabels = {"Time / duration (shows as 8h 5m)",
-                "Count / number", "Time of day (e.g. 6:48pm)"};
-        final int[] vtValues = {3, 0, 4};
+                "Count / number", "Time of day (e.g. 6:48pm)",
+                "Scale 1–9 (for sliders / ratings)"};
+        final int[] vtValues = {3, 0, 4, 8};
         Spinner vtSpinner = new Spinner(activity);
         vtSpinner.setAdapter(new ArrayAdapter<>(activity,
                 android.R.layout.simple_spinner_dropdown_item, vtLabels));

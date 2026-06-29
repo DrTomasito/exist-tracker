@@ -92,7 +92,8 @@ public class DashboardActivity extends AppCompatActivity {
         LinearLayout r1 = Ui.statRow(this);
         r1.addView(Ui.statCell(this, hm(settings.getHospitalMin()), "At work",
                 overColor("hospital", settings.getHospitalMin(), Ui.TEXT)));
-        r1.addView(Ui.statCell(this, hm(settings.getHomeMin()), "At home", Ui.TEXT));
+        r1.addView(Ui.statCell(this, hm(settings.getScreenMin()), "Screen on",
+                overColor("screen", settings.getScreenMin(), Ui.TEXT)));
         glance.addView(r1);
         LinearLayout r2 = Ui.statRow(this);
         int ytTotal = settings.getYoutubeMin() + settings.getWorkYoutubeMin();
@@ -102,8 +103,8 @@ public class DashboardActivity extends AppCompatActivity {
                 overColor("social", settings.getSocialMin(), Ui.WARN)));
         glance.addView(r2);
         LinearLayout r3 = Ui.statRow(this);
-        r3.addView(Ui.statCell(this, hm(settings.getScreenMin()), "Screen on",
-                overColor("screen", settings.getScreenMin(), Ui.TEXT)));
+        r3.addView(Ui.statCell(this, hm(settings.getClaudeTotalMin()), "Claude (all)",
+                overColor("claude", settings.getClaudeTotalMin(), Ui.ACCENT)));
         r3.addView(Ui.statCell(this, hm(settings.getWorkDistractMin()), "Work distractions",
                 overColor("work_distract", settings.getWorkDistractMin(), Ui.WARN)));
         glance.addView(r3);

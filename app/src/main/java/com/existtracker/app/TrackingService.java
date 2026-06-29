@@ -307,6 +307,21 @@ public class TrackingService extends Service {
         }
     }
 
+    /** Attribute the increase in Claude phone time to "at work" when we're
+     *  currently at the hospital. Uses a baseline like the app-usage buckets. */
+    private void applyClaudeAtWorkDelta(int totalMin) {
+        long baseline = settings.getUsageBaseline("claude_atwork_base");
+        int delta;
+        if (baseline < 0) delta = 0; // don't attribute the first reading in bulk
+        else if (totalMin > baseline) delta = (int) (totalMin - baseline);
+        else delta = 0;
+        settings.setUsageBaseline("claude_atwork_base", totalMin);
+        // "At work" = currently connected to the hospital WiFi (work bucket).
+        if (delta > 0 && "work".equals(currentBucket)) {
+            settings.addClaudeAtWork(delta);
+        }
+    }
+
     // ---- App usage ----
     private void updateUsage() {
         UsageStatsManager usm = (UsageStatsManager) getSystemService(Context.USAGE_STATS_SERVICE);
@@ -317,6 +332,7 @@ public class TrackingService extends Service {
 
         int youtubeTotalMin = (int) (foregroundSeconds(usm, startOfDay, now, settings.getYoutubePkgs()) / 60);
         int socialTotalMin  = (int) (foregroundSeconds(usm, startOfDay, now, settings.getSocialPkgs()) / 60);
+        int claudeTotalMin  = (int) (foregroundSeconds(usm, startOfDay, now, settings.getClaudePkgs()) / 60);
 
         // 1) Daily total is AUTHORITATIVE — set directly to what the OS reports
         //    for today. This self-corrects every cycle and naturally resets at a
@@ -324,6 +340,13 @@ public class TrackingService extends Service {
         //    never get "stuck" at a stale value.
         settings.setYoutube(youtubeTotalMin);
         settings.setSocial(socialTotalMin);
+        // Claude phone time is authoritative (set, not accumulated), same model.
+        settings.setClaudePhoneMin(claudeTotalMin);
+        // Attribute the increase in Claude phone time to "at work" if we're
+        // currently within work hours (timestamp-based: at work = currently on
+        // hospital WiFi). The computer-side at-work attribution happens in the
+        // bridge later, by comparing computer Claude timestamps to work windows.
+        applyClaudeAtWorkDelta(claudeTotalMin);
 
         // 2) Location buckets (work/home/away) are inherently incremental: we
         //    attribute the *increase* since the last sample to wherever we are
@@ -436,6 +459,9 @@ public class TrackingService extends Service {
                 settings.saveHistory("driving", date, settings.getDrivingMin());
                 settings.saveHistory("church", date, settings.getChurchMin());
                 settings.saveHistory("screen_home", date, settings.getScreenHome());
+                settings.saveHistory("claude_phone", date, settings.getClaudePhoneMin());
+                settings.saveHistory("claude_computer", date, settings.getClaudeComputerMin());
+                settings.saveHistory("claude_atwork", date, settings.getClaudeAtWorkMin());
                 if (settings.getChurchArrivalToday() >= 0)
                     settings.saveChurchArrival(date, settings.getChurchArrivalToday());
                 settings.saveHistory("screen", date, settings.getScreenMin());
@@ -569,23 +595,52 @@ public class TrackingService extends Service {
 
     /** Pull work-computer minutes from the configured relay before posting. */
     private void pullFromRelay(ExistApi api) {
+        // Source 3: browser-extension relay (existing). Store its value, but
+        // don't overwrite the composite total yet — that's done after summing.
+        int relayDistract = 0, relayYoutube = 0;
         String mode = settings.getRelayMode();
         try {
             if ("exist".equals(mode)) {
-                int distract = api.readTodayValue(settings.getRelayDistractAttr());
-                int ytWork = api.readTodayValue(settings.getRelayYoutubeAttr());
-                settings.setWorkDistractMin(distract);
-                settings.setWorkYoutubeMin(ytWork);
+                relayDistract = api.readTodayValue(settings.getRelayDistractAttr());
+                relayYoutube = api.readTodayValue(settings.getRelayYoutubeAttr());
             } else if ("jsonbin".equals(mode)) {
                 RelayReader.WorkData d = RelayReader.readJsonbin(
                         settings.getJsonbinId(), settings.getJsonbinKey());
                 if (d != null && today().equals(d.date)) {
-                    settings.setWorkDistractMin(d.distract);
-                    settings.setWorkYoutubeMin(d.youtube);
+                    relayDistract = d.distract;
+                    relayYoutube = d.youtube;
                 }
             }
-            // "off" -> leave at zero
         } catch (Exception ignored) {}
+        if (relayYoutube > 0) settings.setWorkYoutubeMin(relayYoutube);
+
+        // Source 2: WakaTime external durations on distraction domains.
+        if (settings.getWdWakaEnabled() && !settings.getWakatimeKey().isEmpty()) {
+            try {
+                String[] domains = settings.getWakatimeDomains().split(",");
+                int wd = WakaTimeReader.readDistractionMinutes(
+                        settings.getWakatimeKey(), today(), domains);
+                if (wd >= 0) settings.setWakaDistractMin(wd);
+            } catch (Exception ignored) {}
+        }
+
+        // Compose the total from the enabled sources.
+        int total = 0;
+        if (settings.getWdPhoneEnabled()) {
+            // Source 1: phone YouTube + social while on work WiFi.
+            total += Math.max(0, settings.getYtWork()) + Math.max(0, settings.getSocWork());
+        }
+        if (settings.getWdWakaEnabled()) {
+            total += Math.max(0, settings.getWakaDistractMin());
+        }
+        if (settings.getWdRelayEnabled()) {
+            total += Math.max(0, relayDistract);
+        }
+        if (settings.getWdClaudeEnabled()) {
+            // Claude time that happened during work-time windows (timestamp-based).
+            total += Math.max(0, settings.getClaudeAtWorkMin());
+        }
+        settings.setWorkDistractMin(total);
     }
 
     /** POST today's display metrics to the backend's /metrics endpoint. */

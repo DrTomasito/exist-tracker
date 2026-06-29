@@ -210,6 +210,17 @@ public class MainActivity extends AppCompatActivity {
                 "App package(s)", () -> settings.getYoutubePkgs(), s -> settings.setYoutubePkgs(s),
                 "social"));
 
+        // Claude app time (phone). Combined with computer Claude time (bridge).
+        EditText claudePkgs = new EditText(this);
+        darkEt(claudePkgs);
+        claudePkgs.setHint("Claude app package(s)");
+        claudePkgs.setText(settings.getClaudePkgs());
+        fieldSavers.add(() -> {
+            String v = claudePkgs.getText().toString().trim();
+            if (!v.isEmpty()) settings.setClaudePkgs(v);
+        });
+        root.addView(labeled("Claude app package", claudePkgs));
+
         root.addView(trackerEditor("Social Media Time",
                 () -> settings.getSocialAttr(), s -> settings.setSocialAttr(s),
                 "App package(s), comma-separated",
@@ -483,6 +494,57 @@ public class MainActivity extends AppCompatActivity {
         binKey.setText(settings.getJsonbinKey());
         fieldSavers.add(() -> settings.setJsonbinKey(binKey.getText().toString().trim()));
         root.addView(binKey);
+
+        // Work-distraction sources: choose which count toward the total.
+        root.addView(note("Work distractions = the sum of the sources you enable "
+                + "below. Phone = YouTube/Facebook/Instagram while on work WiFi. "
+                + "WakaTime = distraction sites tracked by your work browser. "
+                + "Extension relay = the work-computer extension above."));
+
+        CheckBox wdPhone = new CheckBox(this);
+        wdPhone.setText("Count phone YT/FB/IG while on work WiFi");
+        wdPhone.setTextColor(Ui.TEXT);
+        wdPhone.setChecked(settings.getWdPhoneEnabled());
+        wdPhone.setOnCheckedChangeListener((v, on) -> settings.setWdPhoneEnabled(on));
+        root.addView(wdPhone);
+
+        CheckBox wdRelay = new CheckBox(this);
+        wdRelay.setText("Count the browser-extension relay (above)");
+        wdRelay.setTextColor(Ui.TEXT);
+        wdRelay.setChecked(settings.getWdRelayEnabled());
+        wdRelay.setOnCheckedChangeListener((v, on) -> settings.setWdRelayEnabled(on));
+        root.addView(wdRelay);
+
+        CheckBox wdWaka = new CheckBox(this);
+        wdWaka.setText("Count WakaTime distraction-site time");
+        wdWaka.setTextColor(Ui.TEXT);
+        wdWaka.setChecked(settings.getWdWakaEnabled());
+        wdWaka.setOnCheckedChangeListener((v, on) -> settings.setWdWakaEnabled(on));
+        root.addView(wdWaka);
+
+        CheckBox wdClaude = new CheckBox(this);
+        wdClaude.setText("Count Claude time during work hours");
+        wdClaude.setTextColor(Ui.TEXT);
+        wdClaude.setChecked(settings.getWdClaudeEnabled());
+        wdClaude.setOnCheckedChangeListener((v, on) -> settings.setWdClaudeEnabled(on));
+        root.addView(wdClaude);
+
+        EditText wakaKey = new EditText(this);
+        darkEt(wakaKey);
+        wakaKey.setHint("WakaTime API key (from wakatime.com/settings/api-key)");
+        wakaKey.setText(settings.getWakatimeKey());
+        fieldSavers.add(() -> settings.setWakatimeKey(wakaKey.getText().toString().trim()));
+        root.addView(labeled("WakaTime API key", wakaKey));
+
+        EditText wakaDomains = new EditText(this);
+        darkEt(wakaDomains);
+        wakaDomains.setHint("Distraction domains, comma-separated");
+        wakaDomains.setText(settings.getWakatimeDomains());
+        fieldSavers.add(() -> {
+            String v = wakaDomains.getText().toString().trim();
+            if (!v.isEmpty()) settings.setWakatimeDomains(v);
+        });
+        root.addView(labeled("WakaTime distraction domains", wakaDomains));
 
         // --- Step 8: Time together (with wife) ---
         root.addView(section("Step 8 — Time together"));
