@@ -34,7 +34,61 @@ public class DashboardActivity extends AppCompatActivity {
         setContentView(build());
     }
 
-    @Override protected void onResume() { super.onResume(); setContentView(build()); }
+    @Override protected void onResume() {
+        super.onResume();
+        maybeRefreshCalendars();
+        setContentView(build());
+    }
+
+    /** Once per day, refresh the call/travel calendars in the background so the
+     *  banner reflects today. Cheap and non-blocking; updates on next rebuild. */
+    private void maybeRefreshCalendars() {
+        final String today = Stopwatches.todayStr();
+        if (today.equals(settings.getCalLastFetch())) return; // already today
+        new Thread(() -> {
+            try {
+                java.util.List<IcsCalendar.Event> call =
+                        IcsCalendar.fetch(settings.getCallIcsUrl());
+                if (call != null) {
+                    settings.setOnCallToday(
+                            IcsCalendar.isDateMatching(call, today, "on call"));
+                }
+                java.util.List<IcsCalendar.Event> travel =
+                        IcsCalendar.fetch(settings.getTravelIcsUrl());
+                if (travel != null) {
+                    String type = "";
+                    if (IcsCalendar.isDateMatching(travel, today, "conference")) type = "work";
+                    else if (IcsCalendar.isDateMatching(travel, today, "vacation")) type = "family";
+                    else if (IcsCalendar.isDateMatching(travel, today)) type = "travel";
+                    settings.setTravelTypeToday(type);
+                }
+                if (call != null || travel != null) {
+                    settings.setCalLastFetch(today);
+                    runOnUiThread(() -> setContentView(build()));
+                }
+            } catch (Exception ignored) {}
+        }).start();
+    }
+
+    /** A colored full-width banner used for on-call / travel days. */
+    private View calendarBanner(String text, int color) {
+        TextView t = new TextView(this);
+        t.setText(text);
+        t.setTextColor(Color.WHITE);
+        t.setTextSize(15);
+        t.setTypeface(t.getTypeface(), android.graphics.Typeface.BOLD);
+        int pad = Ui.dp(this, 12);
+        t.setPadding(pad, pad, pad, pad);
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(color);
+        bg.setCornerRadius(Ui.dp(this, 10));
+        t.setBackground(bg);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, Ui.dp(this, 4), 0, Ui.dp(this, 8));
+        t.setLayoutParams(lp);
+        return t;
+    }
 
     private View build() {
         ScrollView scroll = new ScrollView(this);
@@ -48,6 +102,20 @@ public class DashboardActivity extends AppCompatActivity {
         // Header
         root.addView(Ui.eyebrow(this, "Your day, measured"));
         root.addView(Ui.title(this, "Dashboard"));
+
+        // On-call / travel banner — shows only on days the calendars say so.
+        if (settings.getOnCallToday()) {
+            root.addView(calendarBanner("\uD83D\uDCDF  On call today", Ui.WARN));
+        }
+        String tt = settings.getTravelTypeToday();
+        if ("work".equals(tt)) {
+            root.addView(calendarBanner("\u2708\uFE0F  Conference / work travel today", Ui.ACCENT));
+        } else if ("family".equals(tt)) {
+            root.addView(calendarBanner("\uD83C\uDF34  Vacation today", Ui.GOOD));
+        } else if ("travel".equals(tt)) {
+            root.addView(calendarBanner("\u2708\uFE0F  Traveling today", Ui.ACCENT));
+        }
+
         TextView status = Ui.label(this, settings.isLoggedIn()
                 ? "Synced to Exist · " + settings.getLastStatus()
                 : "Not connected to Exist yet — open Settings.");

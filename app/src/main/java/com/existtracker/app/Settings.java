@@ -46,6 +46,32 @@ public class Settings {
 
     public String getHomeAttr()     { return prefs.getString("home_attr", "home_time"); }
     public String getHomeSsid()     { return prefs.getString("home_ssid", "Gilligan"); }
+    // Alternate "home" location (e.g. grandmother's house). Connecting here counts
+    // as being home — same as the primary home SSID for all home-derived metrics.
+    public String getAltHomeSsid()  { return prefs.getString("alt_home_ssid", ""); }
+
+    // ----- Outlook ICS calendars (call + travel). Pre-populated; editable. -----
+    public String getCallIcsUrl() {
+        return prefs.getString("call_ics_url",
+            "https://outlook.live.com/owa/calendar/dcc33293-19c6-410f-8e2f-b9d9591ca246/"
+            + "4e19e8c9-701d-4fcd-9871-7863d103908a/cid-3D89DDC0802FADA4/calendar.ics");
+    }
+    public void setCallIcsUrl(String v) { prefs.edit().putString("call_ics_url", v).apply(); }
+    public String getTravelIcsUrl() {
+        return prefs.getString("travel_ics_url",
+            "https://outlook.live.com/owa/calendar/00000000-0000-0000-0000-000000000000/"
+            + "ea4be93e-ac72-4de1-8e6d-9dbc7b618409/cid-3D89DDC0802FADA4/calendar.ics");
+    }
+    public void setTravelIcsUrl(String v) { prefs.edit().putString("travel_ics_url", v).apply(); }
+
+    // Cached "today" flags derived from the calendars (so the banner is instant
+    // and works offline). Refreshed by the fetch cycle. Per-day, like everything.
+    public boolean getOnCallToday()   { return prefs.getBoolean("cal_on_call_today", false); }
+    public void setOnCallToday(boolean b) { prefs.edit().putBoolean("cal_on_call_today", b).apply(); }
+    public String getTravelTypeToday() { return prefs.getString("cal_travel_today", ""); } // ""|work|family|travel
+    public void setTravelTypeToday(String v) { prefs.edit().putString("cal_travel_today", v).apply(); }
+    public String getCalLastFetch()   { return prefs.getString("cal_last_fetch", ""); }
+    public void setCalLastFetch(String d) { prefs.edit().putString("cal_last_fetch", d).apply(); }
 
     public String getChurchSsid()   { return prefs.getString("church_ssid", "GablesUCC_Guest"); }
     public void setChurchSsid(String v) { prefs.edit().putString("church_ssid", v).apply(); }
@@ -68,6 +94,7 @@ public class Settings {
     public void setHospitalSsid(String v) { prefs.edit().putString("hospital_ssid", v).apply(); }
     public void setHomeAttr(String v)     { prefs.edit().putString("home_attr", v).apply(); }
     public void setHomeSsid(String v)     { prefs.edit().putString("home_ssid", v).apply(); }
+    public void setAltHomeSsid(String v)  { prefs.edit().putString("alt_home_ssid", v).apply(); }
     public void setYoutubeAttr(String v)  { prefs.edit().putString("youtube_attr", v).apply(); }
     public void setYoutubePkgs(String v)  { prefs.edit().putString("youtube_pkgs", v).apply(); }
     public void setSocialAttr(String v)   { prefs.edit().putString("social_attr", v).apply(); }
@@ -227,6 +254,10 @@ public class Settings {
     public void setTrackerSource(String trackerId, String sourceKey) {
         prefs.edit().putString("src_" + trackerId, sourceKey).apply();
     }
+    // Cache of source keys (metric names) seen arriving from the desktop bridge,
+    // so the timer source dropdown can offer them. Comma-separated.
+    public String getKnownSourceKeys() { return prefs.getString("known_source_keys", "claude_computer"); }
+    public void setKnownSourceKeys(String csv) { prefs.edit().putString("known_source_keys", csv).apply(); }
 
     // ----- Inference RESULTS: a dated 0/1 flag per inference key, stored as
     // history so they count over time and sync to the cloud. Key form:

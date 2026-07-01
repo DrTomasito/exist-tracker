@@ -123,7 +123,10 @@ public class TrackingService extends Service {
                 postToExist();
                 try {
                     CloudSync cloud = new CloudSync(this);
-                    if (cloud.isConfigured()) cloud.backupNow();
+                    if (cloud.isConfigured()) {
+                        cloud.pullComputerActivity();
+                        cloud.backupNow();
+                    }
                 } catch (Exception ce) {
                     settings.setCloudLastStatus("Manual cloud sync failed: " + ce.getMessage());
                 }
@@ -176,7 +179,10 @@ public class TrackingService extends Service {
                 if (settings.getArrivalToday() < 0) settings.setArrivalToday(minOfDay);
                 settings.setDepartureToday(minOfDay);
             }
-            if (ssid.equalsIgnoreCase(settings.getHomeSsid())) {
+            String altHome = settings.getAltHomeSsid();
+            boolean isHomeSsid = ssid.equalsIgnoreCase(settings.getHomeSsid())
+                    || (!altHome.isEmpty() && ssid.equalsIgnoreCase(altHome));
+            if (isHomeSsid) {
                 settings.addHome(minutes);
                 currentBucket = "home";
                 onHomeNow = true;
@@ -424,6 +430,15 @@ public class TrackingService extends Service {
                 // Pull work-computer minutes from the relay (extension data).
                 pullFromRelay(api);
 
+                // Pull desktop-bridge activity (Claude on PC, gaming, etc.) and
+                // fold it into the relevant totals/timers.
+                try {
+                    CloudSync cloud = new CloudSync(this);
+                    if (cloud.isConfigured()) cloud.pullComputerActivity();
+                } catch (Exception ignored) {}
+                // Refresh call/travel calendars on manual sync too.
+                try { refreshCalendars(today()); } catch (Exception ignored) {}
+
                 // Combined YouTube total = phone YouTube + work-computer YouTube.
                 int youtubeTotal = settings.getYoutubeMin() + settings.getWorkYoutubeMin();
 
@@ -470,6 +485,7 @@ public class TrackingService extends Service {
                 // Compute the hardwired inferences for the day (gated by their
                 // on/off toggles). Stored as dated 0/1 flags for counting + cloud.
                 computeInferences(date);
+                refreshCalendars(date);
                 settings.saveHistory("yt_work", date, settings.getYtWork());
                 settings.saveHistory("yt_home", date, settings.getYtHome());
                 settings.saveHistory("yt_away", date, settings.getYtAway());
@@ -703,6 +719,44 @@ public class TrackingService extends Service {
      *   weekend_out   = a weekend day with meaningful time away from home
      *                   (home minutes well below an at-home day) and not at work
      */
+    /**
+     * Fetch the call + travel ICS calendars, compute today's flags, cache them,
+     * and push per-day flags to Supabase (not Exist.io). Safe to call often; it
+     * only does the network fetch when needed. Keeps cached flags on failure.
+     */
+    void refreshCalendars(String date) {
+        // Call calendar → on_call flag.
+        java.util.List<IcsCalendar.Event> callEvents =
+                IcsCalendar.fetch(settings.getCallIcsUrl());
+        if (callEvents != null) {
+            boolean onCall = IcsCalendar.isDateMatching(callEvents, date, "on call");
+            settings.setOnCallToday(onCall);
+            pushCalendarFlag("on_call", date, onCall ? 1 : 0);
+        }
+        // Travel calendar → travel type flag (work / family / travel).
+        java.util.List<IcsCalendar.Event> travelEvents =
+                IcsCalendar.fetch(settings.getTravelIcsUrl());
+        if (travelEvents != null) {
+            String type = "";
+            if (IcsCalendar.isDateMatching(travelEvents, date, "conference")) type = "work";
+            else if (IcsCalendar.isDateMatching(travelEvents, date, "vacation")) type = "family";
+            else if (IcsCalendar.isDateMatching(travelEvents, date)) type = "travel";
+            settings.setTravelTypeToday(type);
+            pushCalendarFlag("travel_work", date, "work".equals(type) ? 1 : 0);
+            pushCalendarFlag("travel_family", date, "family".equals(type) ? 1 : 0);
+            pushCalendarFlag("travel_any", date, type.isEmpty() ? 0 : 1);
+        }
+        settings.setCalLastFetch(date);
+    }
+
+    /** Push a per-day 0/1 calendar flag to Supabase as a daily_metric row. */
+    private void pushCalendarFlag(String metric, String date, int value) {
+        try {
+            CloudSync cloud = new CloudSync(this);
+            if (cloud.isConfigured()) cloud.pushDailyMetric(metric, date, value);
+        } catch (Exception ignored) {}
+    }
+
     private void computeInferences(String date) {
         int dow = dayOfWeekFor(date); // Calendar.SUNDAY..SATURDAY
         boolean isSunday = dow == Calendar.SUNDAY;

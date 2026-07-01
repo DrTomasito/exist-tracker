@@ -197,6 +197,32 @@ public class MainActivity extends AppCompatActivity {
                 "WiFi name", () -> settings.getHomeSsid(), s -> settings.setHomeSsid(s),
                 "location"));
 
+        // Alternate home (e.g. grandmother's house): connecting here counts as
+        // being home for all home metrics — so family evenings there still earn
+        // home/together credit. Leave blank to disable.
+        EditText altHome = new EditText(this);
+        darkEt(altHome);
+        altHome.setHint("Alternate home WiFi name (e.g. grandma's) — optional");
+        altHome.setText(settings.getAltHomeSsid());
+        fieldSavers.add(() -> settings.setAltHomeSsid(altHome.getText().toString().trim()));
+        root.addView(labeled("Alternate home WiFi (counts as home)", altHome));
+
+        // Outlook calendars (ICS). Pre-filled; editable. Call → on-call banner +
+        // flag; Travel → conference/vacation day flags. Not synced to Exist.io.
+        EditText callIcs = new EditText(this);
+        darkEt(callIcs);
+        callIcs.setHint("Call calendar ICS URL");
+        callIcs.setText(settings.getCallIcsUrl());
+        fieldSavers.add(() -> settings.setCallIcsUrl(callIcs.getText().toString().trim()));
+        root.addView(labeled("On-call calendar (ICS URL)", callIcs));
+
+        EditText travelIcs = new EditText(this);
+        darkEt(travelIcs);
+        travelIcs.setHint("Travel calendar ICS URL");
+        travelIcs.setText(settings.getTravelIcsUrl());
+        fieldSavers.add(() -> settings.setTravelIcsUrl(travelIcs.getText().toString().trim()));
+        root.addView(labeled("Travel calendar (ICS URL) — 'Conference'/'Vacation' events", travelIcs));
+
         // Church location — same full editor as Home/Hospital (title, Exist attr
         // + chooser, and the WiFi SSID). Tracked in Trends (days/month) and
         // optionally posted to Exist. Intentionally NOT shown on the dashboard.

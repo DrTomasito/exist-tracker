@@ -218,23 +218,23 @@ public class TrendsActivity extends AppCompatActivity {
     private void populateMasterGraphs() {
         masterContainer.removeAllViews();
 
-        // Graph 1 — "big time" metrics: work + time together.
+        // Graph 1 — "big time" metrics: work + home + time together.
         MultiLineChartView g1 = new MultiLineChartView(this);
         g1.setTitle("Big-picture time — " + rangeLabel());
-        g1.setXLabels(addSeriesTo(g1, new String[]{"hospital", "together"},
-                new String[]{"Work", "Together"},
-                new int[]{Ui.ACCENT, Ui.GOOD}));
+        g1.setXLabels(addSeriesTo(g1, new String[]{"hospital", "home", "together"},
+                new String[]{"Work", "Home", "Together"},
+                new int[]{Ui.ACCENT, Color.parseColor("#5B9BD1"), Ui.GOOD}));
         g1.setLayoutParams(chartParams());
         masterContainer.addView(g1);
 
-        // Graph 2 — "small time" metrics: social + youtube + screen.
+        // Graph 2 — "small time" metrics: social + youtube + screen + distractions.
         MultiLineChartView g2 = new MultiLineChartView(this);
         g2.setTitle("Distractions — " + rangeLabel());
         g2.setXLabels(addSeriesTo(g2,
-                new String[]{"social", "youtube", "screen", "screen_home"},
-                new String[]{"Social", "YouTube", "Screen", "Screen@Home"},
+                new String[]{"social", "youtube", "screen", "screen_home", "work_distract"},
+                new String[]{"Social", "YouTube", "Screen", "Screen@Home", "Work distract"},
                 new int[]{Ui.WARN, Color.parseColor("#F2B441"), Ui.MUTED,
-                        Color.parseColor("#5BD1A0")}));
+                        Color.parseColor("#5BD1A0"), Color.parseColor("#E86A6A")}));
         g2.setLayoutParams(chartParams());
         masterContainer.addView(g2);
     }

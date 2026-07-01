@@ -231,6 +231,13 @@ public class Stopwatches {
         replaceTodayLog(id, s.name, todayStr(), value, note);
     }
 
+    /** Set today's total minutes for a tracker from an external source (the
+     *  desktop bridge). Overwrites today's value — the external source is
+     *  authoritative for that tracker on days it reports. */
+    public void setExternalToday(String id, int minutes) {
+        prefs.edit().putInt("total_" + id + "_" + todayStr(), Math.max(0, minutes)).apply();
+    }
+
     /** Counter notes attach to a SPECIFIC tap event, identified by its timestamp.
      *  Set/replace the note on the log entry with this timestamp. */
     public void setNoteByTs(long ts, String note) {
